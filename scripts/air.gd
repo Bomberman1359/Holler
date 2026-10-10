@@ -227,7 +227,7 @@ func _process(delta: float) -> void:
 	if look != "":
 		_push_glows(cam.global_position)
 		return
-	var on: bool = Game.lamp_on and not Game.scope_on
+	var on: bool = Game.lamp_on and not Game.scope_on and not Game.in_title
 	var want := cam.global_transform * Transform3D(Basis(Vector3.RIGHT, deg_to_rad(-LAMP_DROOP)), Vector3(0.24, -0.2, 0.05))
 	if lamp.global_position.distance_to(want.origin) > 3.0:
 		lamp.global_transform = want

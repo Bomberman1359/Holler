@@ -37,7 +37,6 @@ var foot := 0
 var last_step := -1
 var danger := 0.0
 var odd_wait := 30.0
-var quiet := false
 var giant: Dictionary
 var throat: Dictionary
 
@@ -81,8 +80,8 @@ func _ready() -> void:
 	AudioServer.set_bus_volume_db(_bus(BED_BUS), 0.0)
 	_make_voices()
 	wind = _bed("wind_bed", -11.0)
-	night = _bed("night_bed", -15.0)
-	music = _bed("music", MUSIC_DB)
+	night = _bed("night_bed", -60.0 if Game.in_title else -15.0)
+	music = _bed("music", -60.0 if Game.in_title else MUSIC_DB)
 	tension = _bed("tension", -60.0)
 	chase = _bed("chase", -60.0)
 	whispers = _bed("whispers", -60.0)
@@ -329,7 +328,7 @@ func _process(delta: float) -> void:
 	var world: Node = Game.world
 	var colossus: Node3D = world.get("colossus") if world else null
 	var reacher: Node3D = world.get("reacher") if world else null
-	var live := not quiet and not Game.ended and Game.player != null
+	var live := not Game.in_title and not Game.ended and Game.player != null
 
 	if colossus and colossus.visible and live and not Game.busy:
 		call_wait -= delta
@@ -352,9 +351,9 @@ func _process(delta: float) -> void:
 		night_quiet = maxf(night_quiet - delta, 0.0)
 		if night_quiet <= 0.0:
 			night_cut = false
-	var night_db := -60.0 if (night_cut or quiet) else -15.0
+	var night_db := -60.0 if (night_cut or Game.in_title) else -15.0
 	night.volume_db = move_toward(night.volume_db, night_db, delta * (90.0 if night_cut else 12.0))
-	wind.volume_db = move_toward(wind.volume_db, -17.0 if quiet else -11.0, delta * 6.0)
+	wind.volume_db = move_toward(wind.volume_db, -17.0 if Game.in_title else -11.0, delta * 6.0)
 
 	hum.volume_db = move_toward(hum.volume_db, lerpf(-60.0, -7.0, Game.hum) if live else -60.0, delta * 40.0)
 	whispers.volume_db = move_toward(whispers.volume_db, lerpf(-34.0, -8.0, (Game.hum - 0.45) / 0.55) if (live and Game.hum > 0.45) else -60.0, delta * 30.0)
@@ -382,7 +381,7 @@ func _process(delta: float) -> void:
 	if colossus and colossus.visible and Game.player:
 		var d: float = Game.player.global_position.distance_to(colossus.body_point() * Vector3(1, 0, 1) + Vector3(0, Game.player.global_position.y, 0))
 		target = lerpf(-50.0, MUSIC_DB, clampf((d - 500.0) / 1200.0, 0.0, 1.0))
-	if Game.ended or quiet:
+	if Game.ended or Game.in_title:
 		target = -60.0
 	music.volume_db = move_toward(music.volume_db, target, delta * 4.0)
 
@@ -390,7 +389,7 @@ func _process(delta: float) -> void:
 
 
 func _odd_noises(delta: float) -> void:
-	if quiet or Game.busy or Game.ended or Game.player == null or danger > 0.3:
+	if Game.in_title or Game.busy or Game.ended or Game.player == null or danger > 0.3:
 		return
 	odd_wait -= delta
 	if odd_wait > 0.0:

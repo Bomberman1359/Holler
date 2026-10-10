@@ -133,6 +133,8 @@ func _run() -> void:
 		await _films()
 	if _wanted("death"):
 		await _death()
+	if _wanted("resume"):
+		await _resume()
 	if _wanted("ending"):
 		await _ending()
 	Engine.time_scale = 1.0
@@ -141,6 +143,37 @@ func _run() -> void:
 		Rig.finish(0 if failed == 0 else 1)
 	else:
 		get_tree().quit(0 if failed == 0 else 1)
+
+
+func _resume() -> void:
+	print("resume")
+	var story: Node = Game.world.story
+	var keep: Array = Game.films.duplicate()
+	var keep_at: Vector3 = Game.checkpoint
+	var keep_yaw: float = Game.checkpoint_yaw
+	var Terrain := preload("res://scripts/terrain.gd")
+	for i in Game.FILM_COUNT:
+		Game.films[i] = i < 3
+	Game.checkpoint = Terrain.track_point(1300.0) + Vector3(0, 0.2, 0)
+	Game.save_game()
+	check("the night is saved with three films", Game.saved_films() == 3)
+	for i in Game.FILM_COUNT:
+		Game.films[i] = false
+	check("the saved night loads", Game.load_game() and Game.film_total() == 3)
+	for i: int in story.film_items:
+		story.film_items[i].used = false
+	story.resume()
+	check("films already taken are spent", story.film_items[0].used and story.film_items[2].used and not story.film_items[3].used)
+	check("the colossus stands where film three left it", story.colossus_leg == 2 and Game.world.colossus.visible)
+	check("road events behind the checkpoint are done", story.road_done > 0)
+	Game.clear_save()
+	check("a cleared night is gone", Game.saved_films() == -1)
+	for i in Game.FILM_COUNT:
+		Game.films[i] = keep[i]
+		if story.film_items.has(i):
+			story.film_items[i].used = keep[i]
+	Game.checkpoint = keep_at
+	Game.checkpoint_yaw = keep_yaw
 
 
 func _gait() -> void:

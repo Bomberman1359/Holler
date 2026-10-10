@@ -1,8 +1,9 @@
 extends CanvasLayer
 
-signal finished
+signal finished(mode: String)
 
 const UI := preload("res://scripts/ui.gd")
+const TitleStage := preload("res://scripts/title_stage.gd")
 
 const ORDER := """[b]HEADQUARTERS, TECHNICAL INTELLIGENCE BRANCH[/b]
 Regensburg, U.S. Zone
@@ -34,6 +35,14 @@ var hint: Label
 var title_box: Control
 var hold := 0.0
 var world_ready := false
+var stage_node: Node3D
+var menu: Control
+var items: Array[Label] = []
+var choices: Array[String] = []
+var picked := 0
+var black: ColorRect
+var theme: AudioStreamPlayer
+var leaving := false
 
 
 func _ready() -> void:
@@ -130,12 +139,12 @@ func _build_order() -> void:
 	order_sheet.add_child(hint)
 
 
-func _build_title() -> void:
+func _build_title(mode: String) -> void:
 	title_box = Control.new()
 	title_box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(title_box)
-	var lines := [["Hochwald", 150, 270.0, "black"], ["Bavarian Forest, October 1947", 28, 470.0, "book_it"],
-			["Running, zooming and the scope all make noise.", 19, 885.0, "typed"]]
+	var first := "Hochwald valley, 14 October 1947" if mode == "new" else "Film %d of 6" % Game.film_total()
+	var lines := [[first, 44, 380.0, "book_it"], ["Running, zooming and the scope all make noise.", 19, 885.0, "typed"]]
 	for l: Array in lines:
 		var label := Label.new()
 		label.add_theme_font_override("font", UI.font(l[3]))
@@ -158,22 +167,44 @@ func _process(delta: float) -> void:
 			leader.queue_redraw()
 			if not world_ready:
 				return
-			sweep += delta / 0.7
+			if stage_node == null and not Game.skip_title and Game.world:
+				stage_node = Node3D.new()
+				stage_node.set_script(TitleStage)
+				Game.world.add_child(stage_node)
+			sweep += delta / (0.04 if Rig.opt("fast", false) else 0.7)
 			if sweep >= 1.0:
 				sweep = 0.0
 				count -= 1
 				if count == 2:
 					_beep()
 				if count < 2:
-					stage = 1
 					leader.queue_free()
-					_build_order()
+					if Game.skip_title:
+						Game.skip_title = false
+						_start("new")
+					else:
+						stage = 1
+						_build_menu()
 		1:
+			_point_at_mouse()
+			hold += delta
+			var auto := String(Rig.opt("choose", ""))
+			if auto != "" and hold > 4.0 and not leaving:
+				picked = maxi(choices.find(auto), 0)
+				_show_pick()
+				_choose(choices[picked])
+		2:
+			if order_text == null:
+				return
 			typed += delta * 70.0
 			order_text.visible_characters = int(typed)
 			if order_text.visible_characters >= order_text.get_total_character_count():
 				hint.visible = true
-		2:
+				if String(Rig.opt("choose", "")) != "" and typed > order_text.get_total_character_count() + 140.0:
+					order_sheet.queue_free()
+					order_text = null
+					_start("new")
+		3:
 			hold += delta
 			if hold < 1.5:
 				title_box.modulate.a = hold / 1.5
@@ -182,7 +213,7 @@ func _process(delta: float) -> void:
 			else:
 				title_box.modulate.a = maxf(1.0 - (hold - 7.0) / 2.0, 0.0)
 			if hold > 9.0:
-				stage = 3
+				stage = 4
 				queue_free()
 
 
@@ -192,7 +223,12 @@ func _beep() -> void:
 
 
 func _input(event: InputEvent) -> void:
-	if stage != 1:
+	if leaving:
+		return
+	if stage == 1:
+		_menu_input(event)
+		return
+	if stage != 2 or order_text == null:
 		return
 	var go: bool = event.is_action_pressed("interact") or (event is InputEventMouseButton and event.pressed) or event.is_action_pressed("ui_accept")
 	if not go:
@@ -201,7 +237,130 @@ func _input(event: InputEvent) -> void:
 	if order_text.visible_characters < order_text.get_total_character_count():
 		typed = 100000.0
 		return
-	stage = 2
 	order_sheet.queue_free()
-	_build_title()
-	finished.emit()
+	_start("new")
+
+
+func _build_menu() -> void:
+	menu = Control.new()
+	menu.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(menu)
+	var shade := ColorRect.new()
+	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	shade.color = Color(0, 0, 0, 0.0)
+	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	menu.add_child(shade)
+	UI.label(menu, "Hochwald", "black", 128, Vector2(92, 70)).size = Vector2(900, 190)
+	UI.label(menu, "Bavarian Forest, October 1947", "book_it", 28, Vector2(100, 238), 0.0, HORIZONTAL_ALIGNMENT_LEFT, UI.DIM)
+	choices = ["new"]
+	var films := Game.saved_films()
+	if films >= 0:
+		choices.append("continue")
+	choices.append("quit")
+	var y := 600.0
+	for c: String in choices:
+		var text: String = {"new": "New night", "continue": "Continue        film %d of 6" % films, "quit": "Quit"}[c]
+		var l := UI.label(menu, text, "typed", 34, Vector2(150, y), 900.0)
+		l.set_meta("text", text)
+		items.append(l)
+		y += 64.0
+	UI.label(menu, "Chunhwee Choi  2026", "typed", 15, Vector2(40, 920), 0.0, HORIZONTAL_ALIGNMENT_LEFT, Color(1, 1, 1, 0.28))
+	black = ColorRect.new()
+	black.color = Color(0, 0, 0, 1.0)
+	black.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	black.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(black)
+	create_tween().tween_property(black, "color:a", 0.0, 1.6)
+	picked = 0
+	hold = 0.0
+	_show_pick()
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	if Game.world and Game.world.get("sfx"):
+		theme = Game.world.sfx._bed("theme", -60.0)
+		create_tween().tween_property(theme, "volume_db", -7.0, 2.5)
+
+
+func _show_pick() -> void:
+	for i in items.size():
+		var l := items[i]
+		var on := i == picked
+		l.text = (">>  " if on else "     ") + String(l.get_meta("text"))
+		l.add_theme_color_override("font_color", UI.INK if on else Color(0.93, 0.92, 0.88, 0.5))
+
+
+func _point_at_mouse() -> void:
+	if Input.mouse_mode != Input.MOUSE_MODE_VISIBLE:
+		return
+	var m := menu.get_local_mouse_position()
+	for i in items.size():
+		var r := Rect2(items[i].position - Vector2(20, 8), Vector2(700, 56))
+		if r.has_point(m) and picked != i:
+			picked = i
+			_show_pick()
+			if Game.world and Game.world.get("sfx"):
+				Game.world.sfx.play("switch", -16.0, 1.4)
+
+
+func _menu_input(event: InputEvent) -> void:
+	var up: bool = event.is_action_pressed("move_forward") or event.is_action_pressed("ui_up")
+	var down: bool = event.is_action_pressed("move_back") or event.is_action_pressed("ui_down")
+	if up or down:
+		picked = (picked + (-1 if up else 1) + items.size()) % items.size()
+		_show_pick()
+		if Game.world and Game.world.get("sfx"):
+			Game.world.sfx.play("switch", -16.0, 1.4)
+		get_viewport().set_input_as_handled()
+		return
+	var click: bool = event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT
+	if click:
+		_point_at_mouse()
+		var m := menu.get_local_mouse_position()
+		var r := Rect2(items[picked].position - Vector2(20, 8), Vector2(700, 56))
+		if not r.has_point(m):
+			return
+	if click or event.is_action_pressed("interact") or event.is_action_pressed("ui_accept") or event.is_action_pressed("jump"):
+		get_viewport().set_input_as_handled()
+		_choose(choices[picked])
+
+
+func _choose(choice: String) -> void:
+	if choice == "quit":
+		get_tree().quit()
+		return
+	leaving = true
+	if Game.world and Game.world.get("sfx"):
+		Game.world.sfx.play("film_click", -6.0, 0.8)
+	if theme:
+		var tw := create_tween()
+		tw.tween_property(theme, "volume_db", -60.0, 1.4)
+		tw.tween_callback(theme.queue_free)
+		theme = null
+	var tw2 := create_tween()
+	tw2.tween_property(black, "color:a", 1.0, 0.7)
+	tw2.tween_callback(func() -> void:
+		menu.queue_free()
+		if stage_node:
+			stage_node.queue_free()
+			stage_node = null
+		if Game.player:
+			Game.player.cam.make_current()
+		leaving = false
+		if choice == "continue":
+			_start("continue")
+		else:
+			stage = 2
+			_build_order()
+		var tw3 := create_tween()
+		tw3.tween_property(black, "color:a", 0.0, 0.6))
+
+
+func _start(mode: String) -> void:
+	stage = 3
+	hold = 0.0
+	if stage_node:
+		stage_node.queue_free()
+		stage_node = null
+		if Game.player:
+			Game.player.cam.make_current()
+	finished.emit(mode)
+	_build_title(mode)

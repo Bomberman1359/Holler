@@ -64,6 +64,7 @@ func _ready() -> void:
 		_build_world()
 		return
 	Game.busy = true
+	Game.in_title = true
 	intro = CanvasLayer.new()
 	intro.set_script(IntroScript)
 	add_child(intro)
@@ -132,7 +133,17 @@ func _build_world() -> void:
 	add_child(pause)
 
 
-func _on_intro_finished() -> void:
+func _on_intro_finished(mode: String) -> void:
+	if mode == "continue" and Game.load_game():
+		var p: CharacterBody3D = Game.player
+		p.global_position = Game.checkpoint + Vector3(0, 0.3, 0)
+		p.rotation.y = Game.checkpoint_yaw
+		p.velocity = Vector3.ZERO
+		if world.get("story"):
+			world.story.resume()
+	elif mode == "new":
+		Game.clear_save()
+	Game.in_title = false
 	Game.busy = false
 	hud.visible = true
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
@@ -152,7 +163,7 @@ func _process(delta: float) -> void:
 func _input(event: InputEvent) -> void:
 	if world == null:
 		return
-	var in_intro: bool = intro != null and is_instance_valid(intro) and intro.stage < 2
+	var in_intro: bool = intro != null and is_instance_valid(intro) and intro.stage < 3
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		if Game.player and (not Game.busy or Game.ended):
 			var rel: Variant = event.get("screen_relative")
@@ -174,8 +185,7 @@ func _input(event: InputEvent) -> void:
 	elif Game.dead:
 		return
 	elif event.is_action_pressed("restart") and Game.ended and hud and hud.end_screen != null:
-		Game.reset()
-		get_tree().reload_current_scene()
+		Game.restart_night()
 	elif event.is_action_pressed("interact"):
 		if world.get("story"):
 			world.story.interact()

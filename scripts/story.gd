@@ -42,6 +42,7 @@ var ending_step := 0
 var items: Array = []
 var current: Dictionary = {}
 var films: Array = [{}, {}, {}, {}, {}, {}]
+var film_items := {}
 var film_cam: Camera3D
 var reading := false
 var playing := false
@@ -106,7 +107,7 @@ func _place_things() -> void:
 		var yaw: float = s.mark_yaw("camera")
 		films[i] = {"cam": at, "look": at + Vector3(sin(yaw), -0.04, cos(yaw)) * 12.0, "site": STOPS[i]}
 		var index := i
-		add_item(at, "Take the film", func() -> void: Game.take_film(index), 2.5, true, 1.0)
+		film_items[i] = add_item(at, "Take the film", func() -> void: Game.take_film(index), 2.5, true, 1.0)
 
 
 func add_item(pos: Vector3, label: String, action: Callable, radius := 2.3, once := true, shine := 1.0) -> Dictionary:
@@ -178,7 +179,7 @@ func _set_glint(i: int, shine: float) -> void:
 func _process(delta: float) -> void:
 	if not intro_done and Game.player and not Shots.active and not Game.busy:
 		intro_done = true
-		Game.say("14 October 1947. Six cameras. Take the films, then radio from the lookout.", 7.0)
+		Game.say("Six cameras. Take the films, then radio from the lookout.", 7.0)
 	_find_item()
 	_update_hidden()
 	_reacher_ground()
@@ -387,6 +388,41 @@ func _after_film(index: int) -> void:
 		later.tween_callback(func() -> void: Game.say("Six films. Get to the fire lookout and call it in.", 7.0))
 
 
+func resume() -> void:
+	intro_done = true
+	for i: int in film_items:
+		if Game.films[i]:
+			var item: Dictionary = film_items[i]
+			item.used = true
+			_set_glint(item.glint, 0.0)
+	var leg := 0
+	if Game.films[0]:
+		leg = 1
+	if Game.films[2]:
+		leg = 2
+	if Game.films[4]:
+		leg = 3
+	if Game.films[5]:
+		leg = 4
+	colossus_leg = leg
+	if world.colossus and leg > 0:
+		var route: Array = [WALK_TO_BOMBER, WALK_PAST_BOMBER, WALK_PAST_RADAR, WALK_OVER_HALL][leg - 1]
+		world.colossus.place(route[route.size() - 1], -1.2)
+	var here := Game.checkpoint
+	var i := Terrain.track_index(here.x, here.z)
+	var along: float = Terrain.track_at[i] if i >= 0 else 0.0
+	road_done = 0
+	while road_done < ROAD.size() and along >= float(ROAD[road_done][0]) - 28.0:
+		road_done += 1
+	approach_saved = 0
+	for k in range(1, STOPS.size()):
+		var c := stop_point(k)
+		if Vector2(c.x - here.x, c.z - here.z).length() < 110.0:
+			approach_saved = k
+	_update_objective()
+	Rig.note("story", "resumed at film %d" % Game.film_total())
+
+
 func next_stop() -> int:
 	for i in Game.FILM_COUNT:
 		if not Game.films[i]:
@@ -425,6 +461,7 @@ func _reacher_ground() -> void:
 		if pp.distance_to(Vector2(c.x, c.z)) < 110.0 and not reacher.is_hunting() and Game.player.is_on_floor():
 			approach_saved = i
 			Game.save_here()
+			Game.save_game()
 	var top := stop_point(6)
 	if pp.distance_to(Vector2(top.x, top.z)) < 150.0:
 		if reacher.state != 0:
@@ -739,6 +776,7 @@ func _ending(delta: float) -> void:
 		player.shake = maxf(player.shake, 0.25 + 0.5 * colossus.reach_blend)
 	if t > 15.5:
 		ending_step = 4
+		Game.clear_save()
 		Rig.note("ending", "taken")
 		Rig.shoot("taken")
 		world.sfx.play("colossus_roar", 8.0, 1.08)

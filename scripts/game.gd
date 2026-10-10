@@ -8,6 +8,7 @@ signal player_back
 
 const FILM_COUNT := 6
 const BATTERY_MAX := 100.0
+const SAVE_PATH := "user://night.json"
 
 var films: Array[bool] = [false, false, false, false, false, false]
 var battery := BATTERY_MAX
@@ -37,6 +38,8 @@ var show_fps := false
 var fewer_trees := false
 var sensitivity := 1.0
 var seen_hints := {}
+var in_title := false
+var skip_title := false
 
 
 func film_total() -> int:
@@ -72,7 +75,66 @@ func take_film(index: int) -> void:
 	films[index] = true
 	Rig.note("film", str(index + 1))
 	save_here()
+	save_game()
 	film_taken.emit(index)
+
+
+func _save_path() -> String:
+	return "user://night_test.json" if Autotest.active else SAVE_PATH
+
+
+func save_game() -> void:
+	if Shots.active or (Rig.active and not Autotest.active):
+		return
+	var f := FileAccess.open(_save_path(), FileAccess.WRITE)
+	if f == null:
+		return
+	f.store_string(JSON.stringify({"films": films, "at": [checkpoint.x, checkpoint.y, checkpoint.z], "yaw": checkpoint_yaw, "battery": battery}))
+
+
+func _read_save() -> Dictionary:
+	if not FileAccess.file_exists(_save_path()):
+		return {}
+	var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(_save_path()))
+	return data if data is Dictionary else {}
+
+
+func saved_films() -> int:
+	var data := _read_save()
+	if data.is_empty():
+		return -1
+	var n := 0
+	for v: Variant in data.get("films", []):
+		if v:
+			n += 1
+	return n
+
+
+func load_game() -> bool:
+	var data := _read_save()
+	if data.is_empty():
+		return false
+	var taken: Array = data.get("films", [])
+	for i in mini(taken.size(), FILM_COUNT):
+		films[i] = bool(taken[i])
+	var at: Array = data.get("at", [])
+	if at.size() == 3:
+		checkpoint = Vector3(at[0], at[1], at[2])
+	checkpoint_yaw = float(data.get("yaw", 0.0))
+	battery = clampf(float(data.get("battery", BATTERY_MAX)), 35.0, BATTERY_MAX)
+	return true
+
+
+func clear_save() -> void:
+	if FileAccess.file_exists(_save_path()):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(_save_path()))
+
+
+func restart_night() -> void:
+	clear_save()
+	reset()
+	skip_title = true
+	get_tree().reload_current_scene()
 
 
 func kill_player(how := "reacher") -> void:

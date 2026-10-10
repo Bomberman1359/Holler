@@ -95,8 +95,7 @@ func _again() -> void:
 	if bus >= 0:
 		AudioServer.set_bus_volume_db(bus, 0.0)
 	get_tree().paused = false
-	Game.reset()
-	get_tree().reload_current_scene()
+	Game.restart_night()
 
 
 func _input(event: InputEvent) -> void:

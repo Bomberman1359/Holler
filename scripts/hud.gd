@@ -172,8 +172,7 @@ func _leave_death(whole_night: bool) -> void:
 	if not death.visible or death.modulate.a < 0.5:
 		return
 	if whole_night:
-		Game.reset()
-		get_tree().reload_current_scene()
+		Game.restart_night()
 		return
 	death.visible = false
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
@@ -191,7 +190,7 @@ func show_end() -> void:
 	UI.label(end_screen, "Hochwald", "black", 120, Vector2(0, 250), W, HORIZONTAL_ALIGNMENT_CENTER, Color(1, 1, 1)).size.y = 170
 	UI.label(end_screen, "The seventh film was never recovered.", "book_it", 30, Vector2(0, 450), W, HORIZONTAL_ALIGNMENT_CENTER)
 	UI.label(end_screen, "A game by Chunhwee Choi", "typed", 20, Vector2(0, 600), W, HORIZONTAL_ALIGNMENT_CENTER, UI.DIM)
-	UI.button(end_screen, "Start the night again", "typed", 26, Vector2(340, 760), 600, func() -> void:
+	UI.button(end_screen, "Back to the title", "typed", 26, Vector2(340, 760), 600, func() -> void:
 		Game.reset()
 		get_tree().reload_current_scene())
 	end_screen.modulate.a = 0.0
