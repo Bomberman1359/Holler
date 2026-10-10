@@ -146,37 +146,49 @@ def rock():
                                 (t, 0, -1), (t, 0, 1), (-t, 0, -1), (-t, 0, 1)]]
     faces = [(0, 11, 5), (0, 5, 1), (0, 1, 7), (0, 7, 10), (0, 10, 11), (1, 5, 9), (5, 11, 4), (11, 10, 2), (10, 7, 6), (7, 1, 8),
              (3, 9, 4), (3, 4, 2), (3, 2, 6), (3, 6, 8), (3, 8, 9), (4, 9, 5), (2, 4, 11), (6, 2, 10), (8, 6, 7), (9, 8, 1)]
-    cache = {}
+    for _ in range(2):
+        cache = {}
 
-    def mid(a, b):
-        key = (min(a, b), max(a, b))
-        if key not in cache:
-            verts.append(unit(verts[a] + verts[b]))
-            cache[key] = len(verts) - 1
-        return cache[key]
+        def mid(a, b):
+            key = (min(a, b), max(a, b))
+            if key not in cache:
+                verts.append(unit(verts[a] + verts[b]))
+                cache[key] = len(verts) - 1
+            return cache[key]
 
-    sub = []
-    for a, b, c in faces:
-        ab, bc, ca = mid(a, b), mid(b, c), mid(c, a)
-        sub += [(a, ab, ca), (b, bc, ab), (c, ca, bc), (ab, bc, ca)]
+        sub = []
+        for a, b, c in faces:
+            ab, bc, ca = mid(a, b), mid(b, c), mid(c, a)
+            sub += [(a, ab, ca), (b, bc, ab), (c, ca, bc), (ab, bc, ca)]
+        faces = sub
     pts = []
     for v in verts:
-        bump = 1.0 + 0.22 * math.sin(v[0] * 5.1 + 1.3) * math.cos(v[2] * 4.3) + 0.12 * math.sin(v[1] * 7.7)
-        p = v * bump * np.array([0.55, 0.36, 0.45])
-        p[1] = max(p[1], -0.12)
-        pts.append(p)
-    for a, b, c in sub:
-        n = unit(np.cross(pts[b] - pts[a], pts[c] - pts[a]))
+        bump = 1.0
+        for k, (fq, amp) in enumerate(((2.3, 0.22), (4.9, 0.11), (9.7, 0.05))):
+            bump += amp * math.sin(v[0] * fq + k * 1.7) * math.cos(v[1] * fq * 0.8 + k) * math.sin(v[2] * fq * 1.1 + 2.0 * k)
+        flat = 1.0 if v[1] > -0.2 else 0.75
+        pts.append(v * bump * np.array([0.55, 0.32 * flat, 0.46]))
+    pts = np.array(pts)
+    normals = np.zeros_like(pts)
+    for a, b, c in faces:
+        n = np.cross(pts[b] - pts[a], pts[c] - pts[a])
         if np.dot(n, pts[a] + pts[b] + pts[c]) < 0:
             n = -n
+        normals[a] += n
+        normals[b] += n
+        normals[c] += n
+    index = []
+    for i, p in enumerate(pts):
+        n = unit(normals[i])
+        g = 0.19 + 0.06 * rng.random()
+        moss = max(n[1], 0.0) * 0.55
+        col = [g * (1.0 - moss * 0.35), g * (1.0 - moss * 0.08), g * (1.0 - moss * 0.5), 1.0]
+        index.append(m.vert(p.tolist(), n.tolist(), [0.5 + p[0], 0.5 + p[2]], col))
+    for a, b, c in faces:
+        n = np.cross(pts[b] - pts[a], pts[c] - pts[a])
+        if np.dot(n, pts[a] + pts[b] + pts[c]) < 0:
             b, c = c, b
-        g = 0.36 + 0.1 * rng.random()
-        moss = max(n[1], 0.0) * 0.5
-        col = [g * (1.0 - moss * 0.3), g * (1.0 - moss * 0.05), g * (1.0 - moss * 0.45), 1.0]
-        ia = m.vert(pts[a].tolist(), n.tolist(), [0, 0], col)
-        ib = m.vert(pts[b].tolist(), n.tolist(), [1, 0], col)
-        ic = m.vert(pts[c].tolist(), n.tolist(), [0, 1], col)
-        m.tri(ia, ib, ic)
+        m.tri(index[a], index[b], index[c])
     m.write("cover_rock")
 
 

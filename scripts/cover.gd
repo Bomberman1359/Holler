@@ -6,7 +6,7 @@ const MeshLib := preload("res://scripts/meshlib.gd")
 const KINDS := [
 	{"mesh": "cover_fern", "channel": 0, "spacing": 1.6, "reach": 28.0, "size": Vector2(0.75, 1.35), "sway": 1.0, "sink": 0.06},
 	{"mesh": "cover_grass", "channel": 1, "spacing": 1.0, "reach": 18.0, "size": Vector2(0.7, 1.4), "sway": 1.6, "sink": 0.02},
-	{"mesh": "cover_rock", "channel": 2, "spacing": 3.0, "reach": 36.0, "size": Vector2(0.5, 2.4), "sway": 0.0, "sink": 0.12},
+	{"mesh": "cover_rock", "channel": 2, "spacing": 3.0, "reach": 36.0, "size": Vector2(0.4, 1.7), "sway": 0.0, "sink": 0.12},
 ]
 
 var layers: Array[Dictionary] = []

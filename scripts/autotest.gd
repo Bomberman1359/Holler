@@ -324,7 +324,11 @@ func _papers() -> void:
 func _films() -> void:
 	var story: Node = Game.world.story
 	Game.invulnerable = true
+	var only_film := int(Rig.opt("film", 0))
 	for i in Game.FILM_COUNT:
+		if only_film > 0 and i + 1 != only_film:
+			Game.films[i] = true
+			continue
 		var data: Dictionary = story.films[i]
 		if data.is_empty():
 			check("film %d has a camera" % (i + 1), false)

@@ -25,6 +25,7 @@ const FILM_SECONDS := [9.4, 9.4, 10.5, 8.4, 9.4, 9.6]
 const FILM_SCARE := [8.7, -1.0, -1.0, 7.1, 8.8, 9.0]
 const FILM_SCARE_AT := [Vector2(2.4, 0.6), Vector2.ZERO, Vector2.ZERO, Vector2(2.3, 0.0), Vector2(2.4, -0.3), Vector2(2.4, 0.2)]
 const FILM_DRIFT := 0.4
+const FILM_TILT := [-0.04, -0.04, 0.16, -0.04, -0.04, -0.04]
 
 const HOLD_START := Vector2(-980, -150)
 const WALK_TO_BOMBER := [Vector2(-860, 120), Vector2(-700, 300)]
@@ -120,7 +121,7 @@ func _place_things() -> void:
 			continue
 		var at: Vector3 = s.mark("camera")
 		var yaw: float = s.mark_yaw("camera")
-		films[i] = {"cam": at, "look": at + Vector3(sin(yaw), -0.04, cos(yaw)) * 12.0, "site": STOPS[i]}
+		films[i] = {"cam": at, "look": at + Vector3(sin(yaw), FILM_TILT[i], cos(yaw)) * 12.0, "site": STOPS[i]}
 		var index := i
 		film_items[i] = add_item(at, "Take the film", func() -> void: Game.take_film(index), 2.5, true, 1.0)
 
