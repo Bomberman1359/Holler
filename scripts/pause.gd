@@ -58,7 +58,7 @@ func _setting(y: float) -> Label:
 func _refresh() -> void:
 	sens_label.text = "mouse speed  %d%%" % int(round(Game.sensitivity * 100.0))
 	fps_label.text = "frame counter  %s" % ("on" if Game.show_fps else "off")
-	tree_label.text = "trees  %s" % ("fewer (faster)" if Game.fewer_trees else "all of them")
+	tree_label.text = "trees and plants  %s" % ("fewer (faster)" if Game.fewer_trees else "all of them")
 	for pair: Array in [[sens_label, "-   +"], [fps_label, "P"], [tree_label, "T"]]:
 		var l: Label = pair[0]
 		if not l.has_meta("key"):
@@ -77,6 +77,7 @@ func open() -> void:
 
 
 func close() -> void:
+	Game.save_settings()
 	panel.visible = false
 	get_tree().paused = false
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED

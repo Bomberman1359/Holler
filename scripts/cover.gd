@@ -10,6 +10,7 @@ const KINDS := [
 ]
 
 var layers: Array[Dictionary] = []
+var fewer := false
 
 
 func _ready() -> void:
@@ -56,10 +57,15 @@ func _ready() -> void:
 		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		mmi.custom_aabb = mm.custom_aabb
 		add_child(mmi)
-		layers.append({"node": mmi, "step": step})
+		layers.append({"node": mmi, "step": step, "mat": mat, "reach": reach, "kind": k.channel})
 
 
 func _process(_delta: float) -> void:
+	if Game.fewer_trees != fewer:
+		fewer = Game.fewer_trees
+		for l: Dictionary in layers:
+			(l.node as Node3D).visible = not (fewer and l.kind == 1)
+			(l.mat as ShaderMaterial).set_shader_parameter("reach", float(l.reach) * (0.65 if fewer else 1.0))
 	var cam := get_viewport().get_camera_3d()
 	if cam == null:
 		return

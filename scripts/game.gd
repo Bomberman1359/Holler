@@ -9,6 +9,7 @@ signal player_back
 const FILM_COUNT := 6
 const BATTERY_MAX := 100.0
 const SAVE_PATH := "user://night.json"
+const SETTINGS_PATH := "user://settings.json"
 
 var films: Array[bool] = [false, false, false, false, false, false]
 var battery := BATTERY_MAX
@@ -40,6 +41,24 @@ var sensitivity := 1.0
 var seen_hints := {}
 var in_title := false
 var skip_title := false
+
+
+func _ready() -> void:
+	if Rig.active or Autotest.active or Shots.active:
+		return
+	var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(SETTINGS_PATH)) if FileAccess.file_exists(SETTINGS_PATH) else null
+	if data is Dictionary:
+		sensitivity = clampf(float(data.get("sensitivity", 1.0)), 0.2, 3.0)
+		show_fps = bool(data.get("show_fps", false))
+		fewer_trees = bool(data.get("fewer_trees", false))
+
+
+func save_settings() -> void:
+	if Rig.active or Autotest.active or Shots.active:
+		return
+	var f := FileAccess.open(SETTINGS_PATH, FileAccess.WRITE)
+	if f:
+		f.store_string(JSON.stringify({"sensitivity": sensitivity, "show_fps": show_fps, "fewer_trees": fewer_trees}))
 
 
 func film_total() -> int:

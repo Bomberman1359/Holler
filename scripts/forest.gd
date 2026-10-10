@@ -26,6 +26,7 @@ var far_mat: ShaderMaterial
 var at_cell := Vector2i(1 << 20, 1 << 20)
 var at_level := -1
 var trunks := {}
+var fewer := false
 var _order: Array[Vector2i] = []
 var _order_d2 := PackedInt32Array()
 
@@ -157,11 +158,11 @@ func warm(point: Vector3, _radius := 0.0) -> void:
 	at_level = level
 	if near_moved:
 		for kind in 4:
-			_fill(near[kind], _gather_kind(c, NEAR_CELLS, kind))
+			_fill(near[kind], _gather_kind(c, 2 if fewer else NEAR_CELLS, kind))
 		trunks.clear()
 	match level:
 		0:
-			_fill(far, _gather(c, FAR_CELLS_MIST))
+			_fill(far, _gather(c, 8 if fewer else FAR_CELLS_MIST))
 		1:
 			_fill(far, _gather(c, 18))
 		_:
@@ -169,6 +170,12 @@ func warm(point: Vector3, _radius := 0.0) -> void:
 
 
 func _process(_delta: float) -> void:
+	if Game.fewer_trees != fewer:
+		fewer = Game.fewer_trees
+		for m: ShaderMaterial in [near_mat, far_mat]:
+			m.set_shader_parameter("fade_from", FADE_FROM * (0.72 if fewer else 1.0))
+			m.set_shader_parameter("fade_to", FADE_TO * (0.72 if fewer else 1.0))
+		at_cell = Vector2i(1 << 20, 1 << 20)
 	var cam := get_viewport().get_camera_3d()
 	if cam:
 		warm(cam.global_position)
