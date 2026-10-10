@@ -126,6 +126,11 @@ func walk_route(points: Array) -> void:
 	warned = false
 
 
+func step_now() -> void:
+	timer = STEP_PERIOD * (0.62 if hurry else 1.0) - SWING_TIME - 0.05
+	warned = true
+
+
 func _pelvis_target() -> Vector3:
 	var mid := (foot_pos[0] + foot_pos[1]) * 0.5
 	var low := minf(foot_pos[0].y, foot_pos[1].y)

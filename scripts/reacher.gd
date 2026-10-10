@@ -38,6 +38,8 @@ var rounds_blocked := 0
 var deaf_time := 0.0
 var body: Node3D
 var posed := false
+var film_goal := Vector3.INF
+var film_speed := 0.0
 var plant := {}
 var swing_from := {}
 var swing_to := {}
@@ -332,6 +334,17 @@ func _process(delta: float) -> void:
 	if not visible or body == null or posed:
 		return
 	_time += delta
+	if film_goal != Vector3.INF:
+		var to := film_goal - global_position
+		to.y = 0.0
+		if to.length() > 0.1:
+			var dir := to.normalized()
+			velocity = dir * film_speed
+			global_position += dir * minf(film_speed * delta, to.length())
+			global_position.y = _floor_at(global_position).y
+			look_at(global_position + dir, Vector3.UP)
+		else:
+			velocity = Vector3.ZERO
 	var speed := Vector2(velocity.x, velocity.z).length()
 	var moving := speed > 0.25
 	var lead := Vector3(velocity.x, 0, velocity.z) * 0.22
@@ -404,10 +417,23 @@ func _process(delta: float) -> void:
 	body.push()
 
 
-func face_the_lens(eye: Vector3, forward: Vector3) -> void:
+func film_run(from: Vector3, to: Vector3, speed: float) -> void:
+	_stand_at(from)
+	state = State.CHARGE
+	jaw_want = 1.0
+	film_goal = to
+	film_speed = speed
+
+
+func film_stop() -> void:
+	film_goal = Vector3.INF
+	velocity = Vector3.ZERO
+
+
+func face_the_lens(eye: Vector3, forward: Vector3, away := 1.62) -> void:
 	visible = true
 	var flat := Vector3(forward.x, 0, forward.z).normalized()
-	global_position = eye + flat * 1.62 + Vector3(0, -1.3, 0)
+	global_position = eye + flat * away + Vector3(0, -1.3, 0)
 	look_at(Vector3(eye.x, global_position.y, eye.z), Vector3.UP)
 	jaw_open = 1.0
 	jaw_want = 1.0

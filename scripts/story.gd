@@ -13,14 +13,18 @@ const PAPER_AT := {
 	"paper_journal3": "journal3", "cell_scratch": "cellwall", "paper_survey_note": "teamnote", "paper_army_order": "armyorder",
 	"paper_staff_memo": "memo", "paper_measuring_log": "measlog", "paper_doctor": "doctor", "paper_lookout_note": "lookoutnote",
 }
-const FILM_CUTS := [
-	[[0.0, [[-50.0, 1.9]]], [3.2, [[-36.0, 3.2]]], [5.6, [[-24.0, 1.2]]], [7.6, [[-17.6, 1.9]]]],
-	[[0.0, []], [2.5, [[21.0, -2.5]]], [5.0, [[16.0, 1.5], [21.0, -2.5]]], [7.4, [[9.5, 0.6], [16.0, 1.5], [21.0, -2.5]]]],
-	[[0.0, [[-30.0, -14.0]]], [3.0, [[-30.0, -14.0], [-16.0, 16.0]]], [6.0, [[-8.0, 6.0], [-30.0, -14.0], [-2.0, -12.0]]], [8.0, [[9.0, 7.0]]]],
-	[[0.0, [[-11.0, -14.0], [-14.5, -8.0], [-11.0, -2.0], [-14.5, 4.0]]], [4.5, [[-11.5, -6.0], [-14.0, -1.0], [-11.5, 3.0], [-13.5, 7.0]]], [7.6, [[-11.2, 0.2]]]],
-	[[0.0, []], [3.0, [[-13.0, -24.0]]], [5.5, [[-13.0, -24.0], [-2.0, -14.0], [12.0, -16.0]]], [8.0, [[1.5, -5.0]]]],
-	[[0.0, [[70.0, -30.0]]], [3.5, [[66.0, -14.0], [74.0, -14.0]]], [6.4, [[64.5, -6.0], [70.0, -8.0], [75.0, -5.5]]], [8.2, [[63.6, -2.8]]]],
+const FILM_SHOTS := [
+	[[0.0, [[42.0, 2.6, "stand"]]], [3.2, [[30.0, 3.2, "stand"]]], [5.6, [[18.0, 2.4, "askew"], [46.0, -6.5, "stand"]]], [7.6, [[9.0, 1.6, "stand"]]]],
+	[[0.0, []], [2.5, [[14.0, 0.0, "stand"]]], [5.0, [[11.0, -1.5, "askew"], [8.0, 3.5, "bent"]]], [7.4, [[6.0, -2.0, "stand"], [5.0, 2.5, "bent"], [13.0, 0.0, "askew"], [3.5, 2.2, "lean_out"]]]],
+	[[0.0, [[19.0, 3.0, "stand"]]], [3.0, [[15.0, -4.0, "askew"], [21.0, 4.5, "stand"]]], [6.0, [[13.0, -3.0, "stand"], [18.0, 4.0, "stand"], [24.0, -1.0, "bent"]]]],
+	[[0.0, [[11.5, -2.5, "stand"], [12.0, -0.8, "stand"], [11.5, 0.9, "stand"], [12.0, 2.6, "stand"]]], [3.6, [[8.5, -2.5, "askew"], [9.0, -0.8, "stand"], [8.5, 0.9, "askew"], [9.0, 2.6, "stand"]]], [5.6, []]],
+	[[0.0, []], [3.0, [[16.0, 0.0, "stand"]]], [5.5, [[14.0, 0.5, "askew"], [13.0, -5.0, "stand"], [35.0, 6.0, "stand"]]], [8.0, [[5.0, -0.5, "stand"]]]],
+	[[0.0, [[11.5, 1.9, "stand"]]], [3.5, [[9.0, 0.0, "stand"], [10.0, 4.0, "askew"]]], [6.4, [[6.0, -1.0, "stand"], [7.5, 2.5, "bent"], [11.5, 1.9, "stand"]]], [8.2, [[3.5, 0.3, "stand"]]]],
 ]
+const FILM_SECONDS := [9.4, 9.4, 10.5, 8.4, 9.4, 9.6]
+const FILM_SCARE := [8.7, -1.0, -1.0, 7.1, 8.8, 9.0]
+const FILM_SCARE_AT := [Vector2(2.4, 0.6), Vector2.ZERO, Vector2.ZERO, Vector2(2.3, 0.0), Vector2(2.4, -0.3), Vector2(2.4, 0.2)]
+const FILM_DRIFT := 0.4
 
 const HOLD_START := Vector2(-980, -150)
 const WALK_TO_BOMBER := [Vector2(-860, 120), Vector2(-700, 300)]
@@ -44,6 +48,17 @@ var current: Dictionary = {}
 var films: Array = [{}, {}, {}, {}, {}, {}]
 var film_items := {}
 var film_cam: Camera3D
+var film_index := -1
+var film_t := 0.0
+var film_shot := -1
+var film_scared := false
+var film_landed := false
+var film_snow := 0.0
+var film_shake := 0.0
+var film_cast: Array = []
+var film_before: Array = []
+var film_crank: AudioStreamPlayer
+var film_fill: Dictionary
 var reading := false
 var playing := false
 var hides: Array[Vector3] = []
@@ -186,6 +201,8 @@ func _process(delta: float) -> void:
 	_colossus_triggers()
 	_road(delta)
 	_ending(delta)
+	if playing and film_index >= 0:
+		_film_frame(delta)
 	_update_objective()
 	if _scare_left > 0.0:
 		_scare_left -= delta
@@ -292,64 +309,174 @@ func _play_film(index: int) -> void:
 	Game.busy = true
 	Game.scope_on = false
 	var mat: ShaderMaterial = Game.main.film_mat
-	var crank: AudioStreamPlayer = world.sfx._bed("crank", -10.0)
+	film_crank = world.sfx._bed("crank", -10.0)
 	var aim: Vector3 = ((data.look as Vector3) - (data.cam as Vector3)).normalized()
 	film_cam.global_position = (data.cam as Vector3) + aim * 0.35
 	film_cam.look_at(data.look, Vector3.UP)
+	film_cam.h_offset = 0.0
+	film_cam.v_offset = 0.0
 	film_cam.make_current()
 	world.forest.warm(data.cam, 300.0)
 	mat.set_shader_parameter("worn", 1.0)
 	world.air.set_look(FILM_LIGHT[index])
-	var fill: Dictionary = world.air.add_glow((data.cam as Vector3) + aim * 5.0 + Vector3(0, 1.2, 0), 26.0, Color(0.8, 0.82, 0.86), 0.55 if FILM_LIGHT[index] == "grey" else 0.25)
+	film_fill = world.air.add_glow((data.cam as Vector3) + aim * 5.0 + Vector3(0, 1.2, 0), 26.0, Color(0.8, 0.82, 0.86), 0.55 if FILM_LIGHT[index] == "grey" else 0.25)
 	Game.main.hud.show_caption("FILM %d        %s" % [index + 1, FILM_DATES[index]])
-	var s: Node3D = site(data.site)
-	var cast: Array = world.watchers.slice(0, 4)
-	var before: Array = []
-	for w: Node3D in cast:
-		before.append([w.global_position, w.rotation.y, w.visible])
-	var tw := create_tween()
-	var last := 0.0
-	for cut: Array in FILM_CUTS[index]:
-		var t: float = cut[0]
-		var places: Array = cut[1]
-		tw.tween_interval(maxf(t - last, 0.01))
-		last = t
-		tw.tween_callback(func() -> void:
-			for k in cast.size():
-				var w: Node3D = cast[k]
-				if k < places.size():
-					var local := Vector3(places[k][0], 0.0, places[k][1])
-					var at: Vector3 = s.global_transform * local
-					at.y = _floor_under(at, (data.cam as Vector3).y)
-					w.global_position = at
-					w.visible = true
-					w.set("held", true)
-					var d: Vector3 = (data.cam as Vector3) - at
-					w.rotation.y = atan2(-d.x, -d.z)
-				else:
-					w.visible = false
-			if t > 0.0:
-				mat.set_shader_parameter("frame", Vector4(randf_range(-0.02, 0.02), randf_range(-0.03, 0.03), 1.25, 1.0))
-				world.sfx.play("film_click", -12.0, 0.7))
-	tw.tween_interval(9.4 - last)
-	tw.tween_callback(func() -> void:
-		for k in cast.size():
-			var w: Node3D = cast[k]
-			w.global_position = before[k][0]
-			w.rotation.y = before[k][1]
-			w.visible = before[k][2]
-			w.set("held", false)
-		mat.set_shader_parameter("worn", 0.0)
-		world.air.set_look("")
-		world.air.clear_glow(fill)
-		Game.main.hud.show_caption("")
-		crank.queue_free()
-		Game.player.cam.make_current()
-		playing = false
-		Game.busy = false
-		if world.reacher:
-			world.reacher.calm(8.0)
-		_after_film(index))
+	film_index = index
+	film_t = 0.0
+	film_shot = -1
+	film_scared = false
+	film_snow = 0.3
+	film_shake = 0.0
+	film_cast = world.watchers.slice(0, 4)
+	film_before = []
+	for w: Node3D in film_cast:
+		film_before.append([w.global_position, w.rotation.y, w.visible, w.stance, w.side])
+		w.set("held", true)
+		w.visible = false
+	var flat := Vector3(aim.x, 0.0, aim.z).normalized()
+	var across := flat.cross(Vector3.UP).normalized()
+	if index == 2 and world.colossus:
+		var at: Vector3 = (data.cam as Vector3) + flat * 135.0 + across * 45.0
+		var to: Vector3 = (data.cam as Vector3) + flat * 115.0 - across * 70.0
+		world.colossus.place(Vector2(at.x, at.z), atan2(across.x, across.z))
+		world.colossus.walk_route([Vector2(to.x, to.z)])
+		world.colossus.step_now()
+		world.air.density_scale = 0.5
+		film_landed = false
+	if index == 3 and world.reacher:
+		world.reacher.sleep()
+
+
+func _film_frame(delta: float) -> void:
+	film_t += delta
+	var data: Dictionary = films[film_index]
+	var mat: ShaderMaterial = Game.main.film_mat
+	var cuts: Array = FILM_SHOTS[film_index]
+	var length: float = FILM_SECONDS[film_index]
+	var shot := 0
+	for k in cuts.size():
+		if film_t >= float(cuts[k][0]):
+			shot = k
+	if shot != film_shot:
+		film_shot = shot
+		if shot > 0:
+			mat.set_shader_parameter("frame", Vector4(randf_range(-0.02, 0.02), randf_range(-0.03, 0.03), 1.25, 1.0))
+			world.sfx.play("static_hit", -18.0, randf_range(0.9, 1.2))
+			film_snow = 0.45
+	var cam_y: float = (data.cam as Vector3).y
+	var places: Array = cuts[shot][1]
+	var after: Array = cuts[shot + 1][1] if shot + 1 < cuts.size() else []
+	var t0: float = cuts[shot][0]
+	var t1: float = cuts[shot + 1][0] if shot + 1 < cuts.size() else length
+	var u := clampf((film_t - t0) / maxf(t1 - t0, 0.01), 0.0, 1.0)
+	var eye := film_cam.global_position
+	var ahead := Vector3(-film_cam.global_basis.z.x, 0.0, -film_cam.global_basis.z.z).normalized()
+	var right := ahead.cross(Vector3.UP).normalized()
+	var watch := eye
+	if film_index == 2 and world.colossus:
+		watch = world.colossus.body_point()
+	for k in film_cast.size():
+		var w: Node3D = film_cast[k]
+		if film_scared and k == 0:
+			continue
+		if k >= places.size():
+			w.visible = false
+			continue
+		var a := Vector2(places[k][0], places[k][1])
+		var b := Vector2(after[k][0], after[k][1]) if k < after.size() else a
+		var p := a.lerp(b, u * FILM_DRIFT)
+		var at := eye + ahead * p.x + right * p.y
+		at.y = _floor_under(at, cam_y)
+		w.global_position = at
+		w.visible = true
+		w.body.visible = true
+		w.set("_shown", true)
+		var d := watch - at
+		w.rotation.y = atan2(-d.x, -d.z)
+		if a.distance_to(b) > 1.0:
+			w.side = 1.0 if int(film_t / 0.42 + k) % 2 == 0 else -1.0
+			w.set_stance("stride")
+		else:
+			w.set_stance(places[k][2])
+	var flat := Vector3(film_cam.global_basis.z.x, 0.0, film_cam.global_basis.z.z).normalized() * -1.0
+	var scare_at: float = FILM_SCARE[film_index]
+	if film_index == 3 and world.reacher:
+		if film_t >= 5.6 and not world.reacher.visible and not film_scared:
+			var from: Vector3 = eye + flat * 13.0 + right * 1.0
+			from.y = _floor_under(from, cam_y) + 0.3
+			var goal := eye + flat * 1.0
+			goal.y = from.y
+			world.reacher.film_run(from, goal, 7.5)
+			world.sfx.play("reacher_alert", -2.0)
+	if scare_at > 0.0 and film_t >= scare_at and not film_scared:
+		film_scared = true
+		film_snow = 0.25
+		if film_index == 3 and world.reacher:
+			world.reacher.film_stop()
+			world.reacher.face_the_lens(eye, -film_cam.global_basis.z, FILM_SCARE_AT[3].x)
+			world.sfx.play("reacher_screech", 2.0, 1.05)
+		elif not film_cast.is_empty():
+			var w: Node3D = film_cast[0]
+			var spot: Vector2 = FILM_SCARE_AT[film_index]
+			var at := eye + flat * spot.x + right * spot.y
+			at.y = _floor_under(at, cam_y)
+			w.global_position = at
+			var d := eye - at
+			w.rotation.y = atan2(-d.x, -d.z)
+			w.visible = true
+			w.body.visible = true
+			w.set("_shown", true)
+			w.set_stance("bent")
+			w.body.set_param("own_light", 0.3)
+			world.sfx.play("watcher_sting", 0.0, 1.0)
+		world.sfx.play("static_hit", -6.0, 0.8)
+		film_shake = 0.5
+	if film_index == 2 and world.colossus and not film_landed and world.colossus.swing_foot < 0 and film_t > 1.0:
+		film_landed = true
+		film_shake = 0.8
+	if scare_at > 0.0 and film_t > scare_at + 0.35:
+		film_snow = 0.9
+	film_snow = move_toward(film_snow, 0.04, delta * 3.0) if film_snow < 0.85 else film_snow
+	mat.set_shader_parameter("snow", film_snow)
+	film_shake = move_toward(film_shake, 0.0, delta * 0.9)
+	film_cam.h_offset = randf_range(-1.0, 1.0) * film_shake * 0.05
+	film_cam.v_offset = randf_range(-1.0, 1.0) * film_shake * 0.07
+	if film_t >= length:
+		_end_film()
+
+
+func _end_film() -> void:
+	var index := film_index
+	var mat: ShaderMaterial = Game.main.film_mat
+	for k in film_cast.size():
+		var w: Node3D = film_cast[k]
+		w.global_position = film_before[k][0]
+		w.rotation.y = film_before[k][1]
+		w.visible = film_before[k][2]
+		w.side = film_before[k][4]
+		w.set_stance(film_before[k][3])
+		w.body.set_param("own_light", 0.03)
+		w.set("held", false)
+	if index == 3 and world.reacher:
+		world.reacher.film_stop()
+		world.reacher.sleep()
+	mat.set_shader_parameter("worn", 0.0)
+	mat.set_shader_parameter("snow", 0.0)
+	film_cam.h_offset = 0.0
+	film_cam.v_offset = 0.0
+	world.air.set_look("")
+	world.air.clear_glow(film_fill)
+	Game.main.hud.show_caption("")
+	if film_crank:
+		film_crank.queue_free()
+		film_crank = null
+	film_index = -1
+	Game.player.cam.make_current()
+	playing = false
+	Game.busy = false
+	if world.reacher and world.reacher.state != 0:
+		world.reacher.calm(8.0)
+	_after_film(index)
 
 
 func _floor_under(at: Vector3, cam_y: float) -> float:

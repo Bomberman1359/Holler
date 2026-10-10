@@ -173,7 +173,7 @@ def tunnel():
             k.tube([(rx + 0.6 + j * 0.55, 0.78, rz + 0.5 + j * 0.2), (rx + 1.05 + j * 0.55, 0.78, rz + 0.62 + j * 0.2)], [0.13, 0.13], 6, P.IRON.but(sky=0.6), solid=False)
     k.mark("hall_door", ((hx0 + hx1) / 2, 0.2, hz1 + 3.0))
     k.mark("hall_center", ((hx0 + hx1) / 2, 0.2, (hz0 + hz1) / 2))
-    with k.at((hx0 + hx1) / 2 - 7.0, 0.0, hz1 + 9.0, yaw=math.pi - 0.2):
+    with k.at((hx0 + hx1) / 2 - 7.0, 0.0, hz1 + 9.0, yaw=math.pi - 0.65):
         P.camera_tripod(k)
         k.mark("camera", (0, 1.5, 0))
 

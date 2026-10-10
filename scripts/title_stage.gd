@@ -5,7 +5,7 @@ const Creature := preload("res://scripts/creature.gd")
 
 const CAMERA_AT := 168.0
 const LOOK_AHEAD := 70.0
-const FAR := 22.0
+const FAR := 19.0
 const NEAR := 9.0
 const BODY := "watcher_smile"
 const TALL := 3.1
@@ -77,7 +77,7 @@ func _ready() -> void:
 	figure.set_param("eye_shine", 1.0)
 	figure.set_param("pattern", 1.0)
 	_set_pose("stand")
-	_stand_at(FAR, 0.6)
+	_stand_at(FAR, 2.0)
 	if Game.main:
 		film = Game.main.film_mat
 
@@ -179,7 +179,7 @@ func _after_glitch() -> void:
 	if flash:
 		flash = false
 		_set_pose("stand")
-		_stand_at(FAR, rng.randf_range(-3.0, 3.0))
+		_stand_at(FAR, rng.randf_range(0.0, 4.0))
 		phase = "idle"
 		return
 	if gone:
@@ -193,6 +193,6 @@ func _after_glitch() -> void:
 	var d := dist - rng.randf_range(1.0, 7.0)
 	if d < NEAR or rng.randf() < 0.15:
 		d = rng.randf_range(FAR - 8.0, FAR + 6.0)
-	_stand_at(d, clampf(side + rng.randf_range(-4.0, 4.0), -7.0, 7.0))
+	_stand_at(d, clampf(side + rng.randf_range(-4.0, 4.0), -1.5, 8.0))
 	phase = "hold"
 	hold_wrong = rng.randf_range(0.5, 1.6)
