@@ -1,0 +1,8 @@
+.godot/
+.DS_Store
+*.zip
+__pycache__/
+screenshots/
+test_out/
+assets/gen/
+audio/
