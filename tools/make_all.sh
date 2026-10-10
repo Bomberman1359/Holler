@@ -14,6 +14,7 @@ fi
 python3 tools/make_sites.py
 python3 tools/make_terrain.py > /dev/null
 python3 tools/make_water.py
+python3 tools/make_cover.py
 if [ "$1" != "quick" ]; then
 	python3 tools/make_audio.py
 fi

@@ -4,6 +4,7 @@ const PlayerScript := preload("res://scripts/player.gd")
 const Terrain := preload("res://scripts/terrain.gd")
 const Sites := preload("res://scripts/sites.gd")
 const Forest := preload("res://scripts/forest.gd")
+const Cover := preload("res://scripts/cover.gd")
 const Air := preload("res://scripts/air.gd")
 const Watcher := preload("res://scripts/watcher.gd")
 const Reacher := preload("res://scripts/reacher.gd")
@@ -18,6 +19,7 @@ var air: Node3D
 var terrain: Node3D
 var player: CharacterBody3D
 var forest: Node3D
+var cover: Node3D
 var colossus: Node3D
 var reacher: CharacterBody3D
 var watchers: Array[Node3D] = []
@@ -44,6 +46,10 @@ func _ready() -> void:
 	forest.name = "Forest"
 	forest.set_script(Forest)
 	add_child(forest)
+	cover = Node3D.new()
+	cover.name = "Cover"
+	cover.set_script(Cover)
+	add_child(cover)
 	_build_water()
 	print("ground and forest in ", Time.get_ticks_msec() - t0, " ms")
 
