@@ -851,7 +851,7 @@ func _on_death(how: String) -> void:
 		cam.fov = 60.0
 		Game.player.shake = 1.4
 		world.sfx.play("death_hit", 2.0)
-		world.sfx.play("reacher_screech", 6.0, 1.1)
+		world.sfx.play("reacher_screech", 3.0, 1.1)
 	_scare_left = 0.7
 	mat.set_shader_parameter("jitter", 1.0)
 

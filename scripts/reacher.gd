@@ -360,12 +360,17 @@ func _steer(to: Vector3) -> Vector3:
 		while true:
 			var p: Vector3 = pts[k]
 			if _clear(here, p):
-				if k == me and k != it and Vector2(here.x - p.x, here.z - p.z).length() < 1.0:
+				var near := Vector2(here.x - p.x, here.z - p.z).length() < 1.2
+				if near and k == it:
+					return to
+				if near and k == me:
 					return pts[k + step]
 				return p
 			if k == me:
 				break
 			k -= step
+		if Vector2(here.x - pts[me].x, here.z - pts[me].z).length() < 1.2:
+			return to
 		return pts[me]
 	return to
 

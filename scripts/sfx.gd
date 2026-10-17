@@ -82,6 +82,16 @@ func _bed(sound: String, volume_db: float) -> AudioStreamPlayer:
 
 func _ready() -> void:
 	AudioServer.set_bus_volume_db(_bus(BED_BUS), 0.0)
+	var master := AudioServer.get_bus_index("Master")
+	var limited := false
+	for i in AudioServer.get_bus_effect_count(master):
+		if AudioServer.get_bus_effect(master, i) is AudioEffectHardLimiter:
+			limited = true
+	if not limited:
+		var limiter := AudioEffectHardLimiter.new()
+		limiter.ceiling_db = -0.8
+		limiter.pre_gain_db = -1.5
+		AudioServer.add_bus_effect(master, limiter, 0)
 	_make_voices()
 	wind = _bed("wind_bed", -19.0)
 	night = _bed("night_bed", -60.0 if Game.in_title else -18.0)

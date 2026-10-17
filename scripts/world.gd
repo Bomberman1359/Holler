@@ -122,7 +122,7 @@ func _build_life() -> void:
 	reacher.click.connect(func() -> void: sfx.play_at("reacher_click", reacher.global_position + Vector3(0, 1.2, 0), 0.0, 55.0, randf_range(0.9, 1.2)))
 	reacher.alerted.connect(func() -> void: sfx.play_at("reacher_alert", reacher.global_position + Vector3(0, 1.2, 0), 4.0, 80.0, randf_range(0.95, 1.05)))
 	reacher.sniffed.connect(func() -> void: sfx.play_at("reacher_sniff", reacher.global_position + Vector3(0, 1.4, 0), -2.0, 40.0, randf_range(0.9, 1.1)))
-	reacher.screech.connect(func() -> void: sfx.play_at("reacher_screech", reacher.global_position + Vector3(0, 1.2, 0), 6.0, 140.0))
+	reacher.screech.connect(func() -> void: sfx.play_at("reacher_screech", reacher.global_position + Vector3(0, 1.2, 0), 2.0, 140.0))
 	player.footstep.connect(sfx.on_step)
 	player.landed.connect(sfx.on_land)
 	player.jumped.connect(func() -> void: sfx.on_step(0.45))
