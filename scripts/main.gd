@@ -192,6 +192,9 @@ func _input(event: InputEvent) -> void:
 	elif event.is_action_pressed("scope"):
 		if Game.player and not Game.busy:
 			Game.player.toggle_scope()
+	elif event.is_action_pressed("lamp"):
+		if Game.player and not Game.busy:
+			Game.player.toggle_lamp()
 	elif event.is_action_pressed("pause"):
 		if Game.ended:
 			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE

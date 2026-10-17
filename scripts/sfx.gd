@@ -5,7 +5,7 @@ const Terrain := preload("res://scripts/terrain.gd")
 const SPEED_OF_SOUND := 343.0
 const VOICES := 16
 const BED_BUS := "beds"
-const MUSIC_DB := -14.0
+const MUSIC_DB := -8.0
 const FLOORS := {"gasthaus": "wood", "lookout": "wood", "lookout_roof": "wood", "bomber": "metal", "radar": "metal"}
 const STEP_COUNT := {"ground": 4, "wood": 3, "stone": 3, "metal": 3, "water": 2}
 const ODD_INDOORS := ["door_creak", "knock", "door_creak"]
@@ -39,6 +39,10 @@ var danger := 0.0
 var odd_wait := 30.0
 var giant: Dictionary
 var throat: Dictionary
+var water: Dictionary
+var near_voices: Array[Dictionary] = []
+var forced_chase := 0.0
+const WATCHER_SOUNDS := ["watcher_laugh", "watcher_cry", "", "whispers"]
 
 
 func _stream(sound: String) -> AudioStream:
@@ -79,8 +83,8 @@ func _bed(sound: String, volume_db: float) -> AudioStreamPlayer:
 func _ready() -> void:
 	AudioServer.set_bus_volume_db(_bus(BED_BUS), 0.0)
 	_make_voices()
-	wind = _bed("wind_bed", -11.0)
-	night = _bed("night_bed", -60.0 if Game.in_title else -15.0)
+	wind = _bed("wind_bed", -19.0)
+	night = _bed("night_bed", -60.0 if Game.in_title else -18.0)
 	music = _bed("music", -60.0 if Game.in_title else MUSIC_DB)
 	tension = _bed("tension", -60.0)
 	chase = _bed("chase", -60.0)
@@ -96,6 +100,11 @@ func _ready() -> void:
 		feet.append(p)
 	giant = _hold("colossus_breath", 620.0)
 	throat = _hold("reacher_breath", 26.0)
+	water = _hold("stream", 46.0)
+	for i in 2:
+		var v := _hold("", 28.0)
+		v["sound"] = ""
+		near_voices.append(v)
 	for sound: String in ["footfall", "cable_sing", "colossus_voice", "colossus_roar", "reacher_click", "reacher_alert", "reacher_sniff",
 			"reacher_screech", "watcher_sting", "branch_crack", "death_hit", "knock", "metal_groan", "door_creak", "land", "paper",
 			"film_click", "switch", "zoom_whirr", "film_burn", "static_hit", "pickup", "locker", "radio_static", "radio_tune", "crank"]:
@@ -195,11 +204,60 @@ func _hold(sound: String, reach: float) -> Dictionary:
 	v.reach = reach
 	v.base_db = -80.0
 	v.pos = Vector3(0, -9999, 0)
-	(v.player as AudioStreamPlayer).stream = _stream(sound)
 	(v.player as AudioStreamPlayer).volume_db = -80.0
-	if (v.player as AudioStreamPlayer).stream:
+	if sound != "":
+		(v.player as AudioStreamPlayer).stream = _stream(sound)
 		(v.player as AudioStreamPlayer).play()
 	return v
+
+
+## Two voices follow the nearest watchers: the smiling one laughs, the frowning one cries, the faceless one whispers.
+func _watcher_voices(live: bool) -> void:
+	var world: Node = Game.world
+	var want: Array = []
+	if live and world and Game.player:
+		var here: Vector3 = Game.player.global_position
+		var found: Array = []
+		for w: Node3D in world.get("watchers"):
+			if not w.visible or WATCHER_SOUNDS[w.face] == "":
+				continue
+			var d := w.global_position.distance_to(here)
+			if d < 30.0:
+				found.append([d, w])
+		found.sort_custom(func(a: Array, b: Array) -> bool: return a[0] < b[0])
+		for f: Array in found.slice(0, near_voices.size()):
+			want.append(f[1])
+	for i in near_voices.size():
+		var v: Dictionary = near_voices[i]
+		var p: AudioStreamPlayer = v.player
+		if i < want.size():
+			var w: Node3D = want[i]
+			var sound: String = WATCHER_SOUNDS[w.face]
+			if v.sound != sound:
+				v.sound = sound
+				p.stream = _stream(sound)
+				p.play(randf() * 4.0)
+			v.pos = w.head_point()
+			v.base_db = 0.0
+		else:
+			v.base_db = -80.0
+
+
+## The river, from the stretch of it nearest to you.
+func _water(live: bool) -> void:
+	if not live or Game.player == null or Terrain.river.is_empty():
+		water.base_db = -80.0
+		return
+	var here: Vector3 = Game.player.global_position
+	var best := 1e12
+	var at := Vector3.ZERO
+	for p in Terrain.river:
+		var d := (p.x - here.x) * (p.x - here.x) + (p.z - here.z) * (p.z - here.z)
+		if d < best:
+			best = d
+			at = p
+	water.pos = at
+	water.base_db = -6.0 if best < 4900.0 else -80.0
 
 
 func _listener() -> Camera3D:
@@ -336,6 +394,8 @@ func _process(delta: float) -> void:
 			call_wait = randf_range(170.0, 320.0)
 			var away: float = Game.player.global_position.distance_to(colossus.body_point())
 			pending.append([away / SPEED_OF_SOUND, "colossus_voice", clampf(-4.0 - away / 300.0, -22.0, -6.0), 0.0])
+	_watcher_voices(live and not Game.busy)
+	_water(live)
 	if colossus and colossus.visible and live:
 		giant.pos = colossus.head_point()
 		giant.base_db = 4.0
@@ -351,9 +411,9 @@ func _process(delta: float) -> void:
 		night_quiet = maxf(night_quiet - delta, 0.0)
 		if night_quiet <= 0.0:
 			night_cut = false
-	var night_db := -60.0 if (night_cut or Game.in_title) else -15.0
+	var night_db := -60.0 if (night_cut or Game.in_title) else -18.0
 	night.volume_db = move_toward(night.volume_db, night_db, delta * (90.0 if night_cut else 12.0))
-	wind.volume_db = move_toward(wind.volume_db, -17.0 if Game.in_title else -11.0, delta * 6.0)
+	wind.volume_db = move_toward(wind.volume_db, -24.0 if Game.in_title else -19.0, delta * 6.0)
 
 	hum.volume_db = move_toward(hum.volume_db, lerpf(-60.0, -7.0, Game.hum) if live else -60.0, delta * 40.0)
 	whispers.volume_db = move_toward(whispers.volume_db, lerpf(-34.0, -8.0, (Game.hum - 0.45) / 0.55) if (live and Game.hum > 0.45) else -60.0, delta * 30.0)
@@ -371,16 +431,20 @@ func _process(delta: float) -> void:
 		breath.pitch_scale = lerpf(1.0, 1.25, spent)
 
 	var now := _danger_now() if (live and not Game.busy) else 0.0
+	if forced_chase > 0.0:
+		forced_chase -= delta
+		if live and not Game.busy:
+			now = 1.0
 	danger = move_toward(danger, now, delta * (1.6 if now > danger else 0.22))
-	tension.volume_db = move_toward(tension.volume_db, lerpf(-34.0, -10.0, clampf((danger - 0.2) / 0.6, 0.0, 1.0)) if danger > 0.2 else -60.0, delta * 24.0)
-	chase.volume_db = move_toward(chase.volume_db, lerpf(-22.0, -6.0, (danger - 0.85) / 0.15) if danger > 0.85 else -60.0, delta * (60.0 if danger > 0.85 else 10.0))
-	heart.volume_db = move_toward(heart.volume_db, lerpf(-26.0, -7.0, clampf((danger - 0.35) / 0.5, 0.0, 1.0)) if danger > 0.35 else -60.0, delta * 30.0)
+	tension.volume_db = move_toward(tension.volume_db, lerpf(-24.0, -5.0, clampf((danger - 0.2) / 0.6, 0.0, 1.0)) if danger > 0.2 else -60.0, delta * 24.0)
+	chase.volume_db = move_toward(chase.volume_db, lerpf(-14.0, -2.0, (danger - 0.85) / 0.15) if danger > 0.85 else -60.0, delta * (60.0 if danger > 0.85 else 10.0))
+	heart.volume_db = move_toward(heart.volume_db, lerpf(-20.0, -4.0, clampf((danger - 0.35) / 0.5, 0.0, 1.0)) if danger > 0.35 else -60.0, delta * 30.0)
 	heart.pitch_scale = lerpf(1.0, 1.7, clampf((danger - 0.35) / 0.65, 0.0, 1.0))
 
 	var target := MUSIC_DB
 	if colossus and colossus.visible and Game.player:
 		var d: float = Game.player.global_position.distance_to(colossus.body_point() * Vector3(1, 0, 1) + Vector3(0, Game.player.global_position.y, 0))
-		target = lerpf(-50.0, MUSIC_DB, clampf((d - 500.0) / 1200.0, 0.0, 1.0))
+		target = lerpf(-30.0, MUSIC_DB, clampf((d - 120.0) / 330.0, 0.0, 1.0))
 	if Game.ended or Game.in_title:
 		target = -60.0
 	music.volume_db = move_toward(music.volume_db, target, delta * 4.0)

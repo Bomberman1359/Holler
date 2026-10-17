@@ -5,6 +5,7 @@ render_mode unshaded, fog_disabled, cull_disabled, depth_draw_opaque;
 
 uniform sampler2D height_map : filter_nearest, repeat_disable;
 uniform sampler2D cover_map : filter_linear, repeat_disable;
+uniform sampler2DArray ground_albedo : source_color, filter_linear_mipmap, repeat_enable;
 uniform float map_size = 2816.0;
 uniform float cell = 2.0;
 uniform float spacing = 1.4;
@@ -78,7 +79,16 @@ void vertex() {
 }
 
 void fragment() {
-	vec3 n = FRONT_FACING ? wn : -wn;
-	vec3 lit = tint * night_light(wpos, n, 0.6, 1.0);
+	vec3 n = dot(wn, CAMERA_POSITION_WORLD - wpos) < 0.0 ? -wn : wn;
+	vec3 albedo = tint;
+	if (channel == 2) {
+		vec3 w = abs(wn);
+		w = w / (w.x + w.y + w.z);
+		vec3 p = wpos * 0.9;
+		vec3 rock = texture(ground_albedo, vec3(p.zy, 2.0)).rgb * w.x + texture(ground_albedo, vec3(p.xz, 2.0)).rgb * w.y + texture(ground_albedo, vec3(p.xy, 2.0)).rgb * w.z;
+		vec3 moss = texture(ground_albedo, vec3(p.xz * 1.3, 0.0)).rgb;
+		albedo = mix(rock * 0.62, moss * 0.8, smoothstep(0.55, 0.9, wn.y) * 0.6) * (tint / 0.22);
+	}
+	vec3 lit = albedo * night_light(wpos, n, 0.6, 1.0);
 	ALBEDO = mix(lit, fog.rgb, fog.a);
 }

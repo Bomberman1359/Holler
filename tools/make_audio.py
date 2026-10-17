@@ -214,16 +214,20 @@ def watcher_hum():
 
 
 def heartbeat():
-    seconds = 0.86
+    seconds = 0.9
     n = int(seconds * SR)
     x = np.zeros(n)
-    for at, f, g in ((0.0, 196, 1.0), (0.27, 228, 0.7)):
-        d = int(0.2 * SR)
+    for at, gain, length, decay in ((0.0, 1.0, 0.16, 26.0), (0.29, 0.62, 0.13, 32.0)):
+        d = int(length * SR)
         k = np.arange(d) / SR
-        thump = (tone(f * np.exp(-k * 5), d) + 0.7 * tone(f * 2 * np.exp(-k * 5), d)) * np.exp(-k * 20) * np.minimum(k / 0.004, 1.0)
-        s = int(at * SR)
-        x[s:s + d] += thump * g
-    save("heartbeat", lowpass(x, 700), 0.6, ogg=True)
+        env = np.minimum(k / 0.012, 1.0) * np.exp(-k * decay)
+        src = lowpass(noise(d), 400) * env
+        beat = peak(src, 78, 2.0) + 0.9 * peak(src, 155, 2.5) + 0.35 * peak(src, 290, 3.0)
+        s0 = int(at * SR)
+        x[s0:s0 + d] += norm(beat) * gain
+    x = np.tanh(x * 3.0)
+    x = lowpass(x, 650)
+    save("heartbeat", loopable(x, 0.05), 0.8, ogg=True)
 
 
 def breath():
@@ -275,19 +279,18 @@ def footfall():
     seconds = 7.0
     n = int(seconds * SR)
     tt = t(seconds)
-    blow = tone(52 * np.exp(-tt * 2.2) + 30, n) * np.exp(-tt * 1.6)
-    body = (tone(168 * np.exp(-tt * 1.4) + 60, n) + 0.6 * tone(246 * np.exp(-tt * 1.8) + 90, n)) * np.exp(-tt * 2.6)
-    thud = bandpass(noise(n), 110, 520) * np.exp(-tt * 3.8) * 2.2
-    slap = bandpass(noise(n), 500, 2600) * np.exp(-tt * 16) * 0.9
-    rumble = bandpass(brown(n), 60, 260) * np.exp(-tt * 0.75) * (1 - np.exp(-tt * 6)) * 2.0
-    x = blow * 0.8 + body * 1.2 + thud + slap + rumble
+    blow = thud(seconds, 46.0, 1.0, 0.0, 1.5, 3.0)
+    body = thud(seconds, 125.0, 1.0, 0.6, 2.6, 2.6)
+    mid = bandpass(noise(n), 160, 520) * np.exp(-tt * 1.6) * np.minimum(tt / 0.01, 1.0)
+    crack = bandpass(noise(n), 500, 2600) * np.exp(-tt * 16) * 0.5
+    rumble = bandpass(brown(n), 60, 260) * np.exp(-tt * 0.75) * (1 - np.exp(-tt * 6)) * 1.6
+    x = norm(blow) * 0.45 + norm(body) * 1.1 + norm(mid) * 0.7 + crack + norm(rumble) * 0.5
     for at in (0.18, 0.4, 0.75, 1.3, 2.1):
         d = int(rng.uniform(0.12, 0.3) * SR)
-        crack = bandpass(noise(d), 350, 3200) * np.exp(-np.linspace(0, rng.uniform(5, 9), d))
+        snap = bandpass(noise(d), 350, 3200) * np.exp(-np.linspace(0, rng.uniform(5, 9), d))
         s = int(at * SR)
-        x[s:s + d] += crack * rng.uniform(0.25, 0.5)
-    mix = reverb2(x, 3.2, 0.3, 1800.0)
-    save("footfall", mix, 0.97)
+        x[s:s + d] += snap * rng.uniform(0.25, 0.5)
+    save("footfall", reverb2(x, 3.2, 0.32, 1800.0), 0.97)
 
 
 def colossus_voice():
@@ -348,23 +351,20 @@ def cable_sing():
 
 def reacher_step():
     for k in range(3):
-        tt = t(0.26)
+        tt = t(0.3)
         n = len(tt)
-        slap = bandpass(noise(n), 300, 2400 - 250 * k) * np.exp(-tt * 38)
-        squelch = bandpass(noise(n), 700, 1800) * np.exp(-((tt - 0.05) / 0.03) ** 2) * 0.6
-        low = (tone(190 * np.exp(-tt * 14) + 70, n)) * np.exp(-tt * 30) * 0.9
-        save("reacher_step%d" % k, slap + squelch + low, 0.8)
+        slap = bandpass(noise(n), 450, 3200 - 250 * k) * np.exp(-tt * 42)
+        wet = bandpass(noise(n), 700, 1900) * np.exp(-((tt - 0.05) / 0.035) ** 2) * (0.6 + 0.4 * np.sin(2 * np.pi * 47 * tt))
+        body = thud(0.3, 105.0 + 12 * k, 0.55, 0.0, 26.0, 1.6)
+        save("reacher_step%d" % k, slap + wet * 0.7 + norm(body) * 0.6, 0.8)
 
 
 def reacher_click():
-    tt = t(0.16)
-    n = len(tt)
-    x = np.zeros(n)
-    for at, f in ((0.0, 1450), (0.055, 1750)):
-        d = n - int(at * SR)
-        k = np.arange(d) / SR
-        knock = tone(f * (1.0 + 0.5 * np.exp(-k * 300)), d) * np.exp(-k * 120) + noise(d) * np.exp(-k * 600) * 0.4
-        x[int(at * SR):] += peak(knock, 900, 3) + knock * 0.4
+    x = np.zeros(int(0.18 * SR))
+    for at, c in ((0.0, 2100.0), (0.06, 2600.0)):
+        k = click(0.06, c, 7.0)
+        s = int(at * SR)
+        x[s:s + len(k)] += k
     save("reacher_click", x, 0.7)
 
 
@@ -399,53 +399,40 @@ def reacher_breath():
 
 
 def reacher_alert():
-    seconds = 0.95
+    seconds = 1.3
     n = int(seconds * SR)
     x = np.zeros(n)
-    at, gap, f = 0.0, 0.115, 1250.0
-    while at < seconds - 0.08:
-        d = int(0.05 * SR)
-        k = np.arange(d) / SR
-        knock = tone(f * (1.0 + 0.5 * np.exp(-k * 300)), d) * np.exp(-k * 130) + noise(d) * np.exp(-k * 600) * 0.4
-        s0 = int(at * SR)
-        x[s0:s0 + d] += peak(knock, 900, 3) + knock * 0.4
-        gap = max(gap * 0.82, 0.027)
-        f *= 1.055
+    at, gap, c = 0.0, 0.11, 1900.0
+    while at < 0.55:
+        k = click(0.05, c, 8.0)
+        s = int(at * SR)
+        x[s:s + len(k)] += k
+        gap = max(gap * 0.8, 0.03)
+        c *= 1.06
         at += gap
-    save("reacher_alert", x, 0.8)
+    shriek = shriek_voice(0.7, 2900.0, 3500.0)
+    s = int(0.55 * SR)
+    x[s:s + len(shriek)] += norm(shriek) * 0.8
+    save("reacher_alert", reverb(x, 1.0, 0.2), 0.85)
 
 
 def reacher_screech():
-    seconds = 2.3
+    seconds = 2.0
     n = int(seconds * SR)
-    tt = t(seconds)
-    f0 = 430 + 330 * (1 - np.exp(-tt * 22)) + 140 * np.exp(-((tt - 0.6) / 0.25) ** 2) - 330 * np.clip((tt - 1.5) / 0.65, 0, 1) ** 1.5
-    crack = np.ones(n)
-    for at, d in ((0.31, 0.07), (0.83, 0.05), (1.12, 0.11), (1.42, 0.06)):
-        crack[int(at * SR):int((at + d) * SR)] = 0.5
-    f = f0 * crack * (1.0 + 0.16 * lowpass(noise(n), 90) + 0.03 * np.sin(2 * np.pi * 31 * tt))
-    src = saw(f, n) + 0.5 * saw(f * 1.497, n)
-    rough = 0.45 + 0.55 * (signal.square(2 * np.pi * np.cumsum(58 + 30 * np.sin(2 * np.pi * 1.7 * tt)) / SR) > 0)
-    src = src * rough + noise(n) * 0.1
-    x = peak(src, 1250, 4) + peak(src, 2500, 5) + peak(src, 3600, 6) * 0.5 + peak(src, 5400, 6) * 0.15 + src * 0.15
-    env = np.minimum(tt / 0.02, 1.0) * np.minimum((seconds - tt) / 0.55, 1.0)
-    x = highpass(lowpass(np.tanh(x / np.max(np.abs(x)) * env * 2.4), 6500), 180)
-    rattle = np.zeros(n)
-    at, gap = 1.5, 0.03
-    while at < seconds - 0.05:
-        d = int(0.02 * SR)
-        k = np.arange(d) / SR
-        rattle[int(at * SR):int(at * SR) + d] += (tone(900, d) + noise(d)) * np.exp(-k * 240)
-        gap *= 1.16
-        at += gap
-    x = x + norm(peak(rattle, 1100, 3)) * 0.55
-    save("reacher_screech", reverb2(x, 1.4, 0.2), 0.98)
+    k = t(seconds)
+    x = norm(shriek_voice(seconds, 1700.0, 2750.0, 2100.0))
+    second = shriek_voice(seconds - 0.25, 2300.0, 3300.0, 2500.0)
+    s = int(0.25 * SR)
+    x[s:s + len(second)] += norm(second) * 0.5
+    throat = bandpass(noise(n), 350, 900) * (0.6 + 0.4 * np.sin(2 * np.pi * 23.0 * k)) * np.minimum(k / 0.05, 1.0) * np.minimum((seconds - k) / 0.3, 1.0)
+    x += norm(throat) * 0.12
+    x = highpass(x, 400)
+    save("reacher_screech", reverb2(x, 1.6, 0.25, 6000.0), 0.95)
 
 
 def watcher_sting():
     seconds = 2.4
     n = int(seconds * SR)
-    tt = t(seconds)
     x = np.zeros(n)
     pre = int(0.32 * SR)
     x[:pre] += bandpass(noise(pre), 900, 5000) * np.linspace(0, 1, pre) ** 3 * 0.5
@@ -456,8 +443,7 @@ def watcher_sting():
         vib = 1.0 + 0.006 * np.sin(2 * np.pi * rng.uniform(5, 7) * k + rng.uniform(0, 6))
         cluster += signal.sawtooth(2 * np.pi * np.cumsum(f * vib) / SR + rng.uniform(0, 6))
     cluster = bandpass(cluster, 400, 5200) * np.exp(-k * 1.9) * np.minimum(k / 0.006, 1.0)
-    thump = (tone(180 * np.exp(-k * 10) + 70, hit)) * np.exp(-k * 9)
-    x[pre:] += cluster * 0.55 + thump * 0.9
+    x[pre:] += norm(cluster) * 0.6 + norm(thud(hit / SR, 85.0, 1.0, 0.5, 9.0)) * 0.8
     save("watcher_sting", reverb2(x, 1.8, 0.3), 0.92)
 
 
@@ -468,7 +454,7 @@ def branch_crack():
     for at, g in ((0.0, 1.0), (0.07, 0.5), (0.19, 0.3)):
         d = int(0.12 * SR)
         k = np.arange(d) / SR
-        snap = bandpass(noise(d), 700, 6000) * np.exp(-k * 60) + tone(310, d) * np.exp(-k * 45) * 0.6
+        snap = bandpass(noise(d), 700, 6000) * np.exp(-k * 60) + peak(noise(d) * np.exp(-k * 45), 310, 6) * 0.8
         s = int(at * SR)
         x[s:s + d] += snap * g
     save("branch_crack", reverb2(x, 1.3, 0.35), 0.75)
@@ -477,16 +463,16 @@ def branch_crack():
 def death_hit():
     seconds = 2.2
     n = int(seconds * SR)
-    k = np.arange(n) / SR
+    k = t(seconds)
     cluster = np.zeros(n)
     for f in (311.1, 329.6, 466.2, 493.9, 698.5, 740.0, 987.8, 1046.5):
         vib = 1.0 + 0.007 * np.sin(2 * np.pi * rng.uniform(5, 7) * k + rng.uniform(0, 6))
         cluster += signal.sawtooth(2 * np.pi * np.cumsum(f * vib) / SR + rng.uniform(0, 6))
     cluster = bandpass(cluster, 250, 6000) * np.exp(-k * 1.3) * np.minimum(k / 0.004, 1.0)
-    slam = (tone(240 * np.exp(-k * 7) + 110, n) + 0.6 * tone(480 * np.exp(-k * 8) + 220, n)) * np.exp(-k * 5)
+    slam = thud(seconds, 75.0, 1.0, 1.0, 5.0, 3.0)
     crash = bandpass(noise(n), 300, 7000) * np.exp(-k * 4.5)
-    x = np.tanh((norm(cluster) * 0.6 + slam * 1.1 + norm(crash) * 0.8) * 1.6)
-    save("death_hit", reverb2(x, 1.6, 0.25), 0.98)
+    x = norm(cluster) * 0.6 + norm(slam) * 1.0 + norm(crash) * 0.6
+    save("death_hit", reverb2(np.tanh(x * 1.3), 1.6, 0.25), 0.98)
 
 
 def knock():
@@ -496,7 +482,7 @@ def knock():
     for at, g in ((0.0, 1.0), (0.44, 0.85), (0.9, 0.7)):
         d = int(0.25 * SR)
         k = np.arange(d) / SR
-        hit = (tone(188, d) + 0.5 * tone(412, d) + 0.25 * tone(655, d)) * np.exp(-k * 32) + bandpass(noise(d), 600, 3000) * np.exp(-k * 120) * 0.5
+        hit = norm(peak(noise(d) * np.exp(-k * 32), 188, 10) + 0.6 * peak(noise(d) * np.exp(-k * 36), 412, 12) + 0.3 * peak(noise(d) * np.exp(-k * 40), 655, 14)) + bandpass(noise(d), 600, 3000) * np.exp(-k * 120) * 0.5
         x[int(at * SR):int(at * SR) + d] += hit * g
     save("knock", reverb2(x, 1.5, 0.4, 2400.0), 0.7)
 
@@ -518,35 +504,34 @@ def footsteps():
     for k in range(4):
         tt = t(0.2)
         n = len(tt)
-        heel = (tone(230 * np.exp(-tt * 14) + 110, n)) * np.exp(-tt * 38)
+        heel = thud(0.2, 140.0 + 15 * k, 0.8, 0.0, 40.0, 1.4)
         earth = bandpass(noise(n), 150, 620 + 60 * k) * np.exp(-tt * 30) * 2.2
         crunch = bandpass(noise(n), 1600, 5200) * np.exp(-((tt - 0.035 - 0.01 * k) / 0.025) ** 2) * 0.1
-        save("step_ground%d" % k, heel * 0.8 + earth + crunch, 0.5)
+        save("step_ground%d" % k, norm(heel) * 0.6 + earth + crunch, 0.5)
     for k in range(3):
         tt = t(0.22)
         n = len(tt)
-        knock = (tone(196 + 22 * k, n) + 0.5 * tone(392 + 40 * k, n) + 0.3 * tone(610 + 30 * k, n)) * np.exp(-tt * 34)
+        board = peak(noise(n) * np.exp(-tt * 30), 190 + 22 * k, 12) + 0.6 * peak(noise(n) * np.exp(-tt * 34), 410 + 40 * k, 14)
         tap = bandpass(noise(n), 900, 3500) * np.exp(-tt * 90) * 0.5
-        save("step_wood%d" % k, knock + tap, 0.5)
+        save("step_wood%d" % k, norm(board) + tap, 0.5)
     for k in range(3):
         tt = t(0.2)
         n = len(tt)
-        tap = bandpass(noise(n), 700, 4200) * np.exp(-tt * 85) + tone(260 + 30 * k, n) * np.exp(-tt * 60) * 0.5
+        tap = bandpass(noise(n), 700, 4200) * np.exp(-tt * 85) + norm(thud(0.2, 240.0 + 30 * k, 0.5, 0.0, 60.0, 1.2)) * 0.4
         save("step_stone%d" % k, reverb(np.pad(tap, (0, int(0.12 * SR))), 0.35, 0.3), 0.5)
     for k in range(3):
         tt = t(0.3)
         n = len(tt)
-        ring = (tone(430 + 50 * k, n) + 0.5 * tone(1180 + 90 * k, n) + 0.3 * tone(2140 + 60 * k, n)) * np.exp(-tt * 22)
+        ring = (peak(noise(n) * np.exp(-tt * 22), 430 + 50 * k, 30) + 0.5 * peak(noise(n) * np.exp(-tt * 25), 1180 + 90 * k, 40)
+                + 0.3 * peak(noise(n) * np.exp(-tt * 30), 2140 + 60 * k, 50))
         tap = bandpass(noise(n), 900, 5000) * np.exp(-tt * 110) * 0.6
-        save("step_metal%d" % k, ring + tap, 0.5)
+        save("step_metal%d" % k, norm(ring) + tap, 0.5)
     for k in range(2):
         tt = t(0.34)
         n = len(tt)
         splash = bandpass(noise(n), 600, 4800) * np.exp(-((tt - 0.05) / 0.06) ** 2) + lowpass(noise(n), 500) * np.exp(-tt * 14) * 0.6
         save("step_water%d" % k, splash, 0.5)
-    tt = t(0.3)
-    n = len(tt)
-    land = bandpass(noise(n), 140, 700) * np.exp(-tt * 20) * 2.0 + (tone(240 * np.exp(-tt * 9) + 110, n)) * np.exp(-tt * 24)
+    land = norm(thud(0.3, 110.0, 1.0, 0.5, 20.0, 1.8)) + bandpass(noise(int(0.3 * SR)), 140, 700) * np.exp(-t(0.3) * 20) * 1.2
     save("land", land, 0.6)
 
 
@@ -658,10 +643,25 @@ def music():
     n = int(seconds * SR)
     tt = t(seconds)
     mix = np.zeros((n, 2))
-    for name, octave, gain, rate, pan in (("D", 1, 0.9, 0.031, -0.2), ("A", 1, 0.7, 0.023, 0.25), ("D", 2, 0.5, 0.041, 0.0), ("F", 2, 0.34, 0.017, -0.4), ("Eb", 2, 0.2, 0.011, 0.5)):
-        v = pad(hz(name, octave), seconds, 5, 0.009, 700.0)
-        breathe = 0.35 + 0.65 * (0.5 + 0.5 * np.sin(2 * np.pi * rate * tt + rng.uniform(0, 6))) ** 2
+    for name, octave, gain, rate, pan in (("D", 1, 0.55, 0.031, -0.2), ("A", 1, 0.45, 0.023, 0.25), ("D", 2, 0.6, 0.041, 0.0), ("F", 2, 0.45, 0.017, -0.4),
+                                          ("Eb", 2, 0.25, 0.011, 0.5), ("A", 2, 0.4, 0.027, 0.35), ("D", 3, 0.28, 0.019, -0.3)):
+        v = pad(hz(name, octave), seconds, 5, 0.009, 1300.0)
+        breathe = 0.3 + 0.7 * (0.5 + 0.5 * np.sin(2 * np.pi * rate * tt + rng.uniform(0, 6))) ** 2
         place(mix, v * breathe, 0.0, gain * 0.5, pan)
+    cello = [("D", 2, 7.0), ("F", 2, 5.0), ("E", 2, 6.0), ("Eb", 2, 9.0), ("D", 2, 6.0), ("C#", 2, 8.0), ("D", 2, 10.0)]
+    at = 6.0
+    while at < seconds - 12.0:
+        for name, octave, length in cello:
+            if at > seconds - 12.0:
+                break
+            d = int(length * SR)
+            k = np.arange(d) / SR
+            f = hz(name, octave) * (1.0 + 0.006 * np.sin(2 * np.pi * 5.2 * k) * np.minimum(k / 1.5, 1.0))
+            src = saw(f, d) + 0.4 * saw(f * 1.003, d)
+            body = peak(src, 520, 3) + peak(src, 1100, 4) * 0.5 + lowpass(src, 700) * 0.6
+            place(mix, reverb(body * swell(d, 1.6, 2.2), 3.0, 0.45, 2400.0), at, 0.07, -0.15)
+            at += length * 0.9
+        at += rng.uniform(14.0, 24.0)
     place(mix, bandpass(noise(n), 180, 420) * (0.3 + 0.7 * (0.5 + 0.5 * np.sin(2 * np.pi * 0.013 * tt)) ** 2), 0.0, 0.05, 0.0)
     tune = [("A", 3), ("F", 3), ("D", 3), ("Eb", 3), ("A", 2)]
     at = 14.0
@@ -678,12 +678,12 @@ def music():
     for at3, f in ((52.0, 1244.5), (96.0, 1174.7), (133.0, 1318.5)):
         d = int(9.0 * SR)
         k = np.arange(d) / SR
-        line = tone(f * (1.0 + 0.003 * np.sin(2 * np.pi * 4.6 * k)), d) + 0.4 * tone(f * 1.0595 * (1.0 + 0.003 * np.sin(2 * np.pi * 5.3 * k)), d)
+        line = lowpass(saw(f * (1.0 + 0.003 * np.sin(2 * np.pi * 4.6 * k)), d) + 0.4 * saw(f * 1.0595 * (1.0 + 0.003 * np.sin(2 * np.pi * 5.3 * k)), d), 3200)
         place(mix, reverb(line * swell(d, 4.0, 3.5), 3.0, 0.5), at3, 0.035, rng.uniform(-0.5, 0.5))
     for at4 in (61.0, 139.0):
         d = int(5.0 * SR)
         k = np.arange(d) / SR
-        boom = (tone(150 * np.exp(-k * 2) + 55, d) + bandpass(noise(d), 90, 300) * 1.5) * np.exp(-k * 1.4)
+        boom = norm(thud(5.0, 55.0, 1.0, 0.2, 1.4, 2.6)) + norm(bandpass(noise(d), 90, 300) * np.exp(-k * 1.4)) * 0.6
         place(mix, reverb(boom, 3.5, 0.5, 900.0), at4, 0.3, 0.0)
     save("music", loopable(mix, 5.0), 0.82, ogg=True)
 
@@ -702,40 +702,51 @@ def tension():
         place(mix, v, 0.0, 0.16, (i - 3) / 3.5)
     bridge = bandpass(noise(n), 2800, 7000) * (0.5 + 0.5 * np.sin(2 * np.pi * 12.0 * tt)) ** 2
     place(mix, bridge, 0.0, 0.05, 0.0)
+    low = pad(hz("D", 1), seconds, 4, 0.006, 600.0) * (0.6 + 0.4 * np.sin(2 * np.pi * tt / 12.0) ** 2)
+    place(mix, low, 0.0, 0.35, 0.0)
     for at in np.arange(0.0, seconds - 1.0, 2.0):
-        d = int(0.9 * SR)
-        k = np.arange(d) / SR
-        thud = (tone(165 * np.exp(-k * 6) + 70, d) + 0.5 * tone(330 * np.exp(-k * 6) + 140, d)) * np.exp(-k * 7) * np.minimum(k / 0.006, 1.0)
-        place(mix, thud, at, 0.5, 0.0)
-    save("tension", loopable(mix, 2.0), 0.8, ogg=True)
+        place(mix, thud(0.9, 70.0, 1.0, 0.25, 7.0, 2.5), at, 0.4, 0.0)
+    save("tension", loopable(mix, 2.0), 0.85, ogg=True)
 
 
 def chase():
-    beat = 0.375
-    beats = 32
+    beat = 60.0 / 138.0
+    bars = 8
+    beats = bars * 4
     seconds = beat * beats + 2.0
     n = int(seconds * SR)
     tt = t(seconds)
     mix = np.zeros((n, 2))
-    for i in range(beats + 5):
-        at = i * beat
-        hard = i % 4 == 0
-        d = int(0.3 * SR)
+    pattern = [1.0, 0.0, 0.55, 0.0, 0.8, 0.45, 0.0, 0.5]
+    for i in range(int((beats + 4) * 2)):
+        at = i * beat / 2
+        g = pattern[i % 8]
+        if g > 0.0:
+            place(mix, thud(0.5, 62.0 if g > 0.7 else 78.0, 1.0, 0.35, 9.0, 2.8), at, 0.55 * g, 0.0)
+    for i in range(int((beats + 4) * 2)):
+        at = i * beat / 2
+        bar = (i // 8) % 4
+        note = [hz("D", 1), hz("D", 1), hz("Eb", 1), hz("D", 1)][bar] * (2.0 if i % 2 else 1.0)
+        d = int(beat * 0.42 * SR)
         k = np.arange(d) / SR
-        drum = (tone((175 if hard else 150) * np.exp(-k * 9) + 68, d) + 0.5 * tone(330 * np.exp(-k * 12) + 140, d)) * np.exp(-k * 13)
-        drum += bandpass(noise(d), 120, 900) * np.exp(-k * 40) * 0.7
-        place(mix, drum, at, 0.75 if hard else 0.45, 0.0)
-        if i % 4 == 2:
-            place(mix, drum, at + beat * 0.5, 0.3, 0.0)
-        note = hz("D", 1) if (i // 2) % 2 == 0 else hz("Eb", 1)
-        d2 = int(beat * 0.92 * SR)
-        k2 = np.arange(d2) / SR
-        bow = lowpass(saw(note, d2) + saw(note * 1.006, d2) + 0.6 * saw(note * 2.0, d2), 1300) * np.minimum(k2 / 0.012, 1.0) * np.exp(-k2 * 5.5)
-        place(mix, bow, at, 0.3, -0.25 if i % 2 else 0.25)
-    wail_f = 1108.7 * (1.0 + 0.045 * np.sin(2 * np.pi * tt / (beat * 16)) + 0.004 * np.sin(2 * np.pi * 5.6 * tt))
-    wail = tone(wail_f, n) + 0.6 * tone(wail_f * 1.0595, n) + 0.3 * tone(wail_f * 2.0, n)
-    place(mix, reverb(wail * (0.5 + 0.5 * np.sin(2 * np.pi * tt / (beat * 32)) ** 2), 2.0, 0.4), 0.0, 0.07, 0.0)
-    save("chase", loopable(mix, 2.0), 0.85, ogg=True)
+        bow = lowpass(saw(note, d) + saw(note * 1.005, d) + 0.5 * saw(note * 1.498, d), 1600) * np.minimum(k / 0.01, 1.0) * np.exp(-k * 7.0)
+        place(mix, bow, at, 0.26, -0.3 if i % 2 else 0.3)
+    for b in range(0, bars, 2):
+        at = b * 4 * beat + beat * 3
+        d = int(beat * 1.0 * SR)
+        k = np.arange(d) / SR
+        stab = np.zeros(d)
+        for f in (1567.98, 1661.2, 1760.0, 2093.0):
+            glide = 1.0 + 0.04 * (k / (d / SR))
+            stab += signal.sawtooth(2 * np.pi * np.cumsum(f * glide * (1.0 + 0.01 * np.sin(2 * np.pi * 7.0 * k))) / SR)
+        stab = bandpass(stab, 1000, 7000) * np.minimum(k / 0.005, 1.0) * np.exp(-k * 3.5)
+        place(mix, stab, at, 0.09, 0.0)
+    rise = np.zeros(n)
+    for f in (293.7, 311.1, 440.0, 466.2):
+        rise += signal.sawtooth(2 * np.pi * np.cumsum(f * (1.0 + 0.003 * np.sin(2 * np.pi * 6.0 * tt))) / SR)
+    rise = bandpass(rise, 250, 2500) * (0.5 + 0.5 * np.sin(2 * np.pi * tt / (beat * 16)) ** 2) * (0.5 + 0.5 * np.sin(2 * np.pi * 12.0 * tt) ** 2)
+    place(mix, rise, 0.0, 0.06, 0.0)
+    save("chase", loopable(mix, 2.0), 0.88, ogg=True)
 
 
 def theme():
@@ -750,7 +761,7 @@ def theme():
     for at in np.arange(3.0, seconds - 4.0, 3.8):
         d = int(1.6 * SR)
         k = np.arange(d) / SR
-        step = (tone(150 * np.exp(-k * 5) + 62, d) + 0.5 * tone(300 * np.exp(-k * 6) + 124, d)) * np.exp(-k * 3.4) * np.minimum(k / 0.01, 1.0)
+        step = thud(1.6, 60.0, 1.0, 0.3, 3.4, 2.6)
         place(mix, step, at, 0.34, 0.0)
     tune = [("A", 3), ("F", 3), ("D", 3), ("Eb", 3), ("A", 2), ("Bb", 2), ("A", 2), ("F#", 2)]
     at = 6.0
@@ -788,6 +799,127 @@ def theme():
     save("theme", loopable(mix, 4.0), 0.85, ogg=True)
 
 
+def thud(seconds, body=90.0, weight=1.0, bright=0.3, decay=12.0, saturate=2.5):
+    n = int(seconds * SR)
+    k = t(seconds)
+    hit = bandpass(noise(n), 250, 2600) * np.exp(-k * 90.0) * bright
+    src = noise(n) * np.exp(-k * decay) * np.minimum(k / 0.003, 1.0)
+    low = peak(lowpass(src, 500), body, 3.0) + 0.45 * peak(lowpass(src, 900), body * 2.4, 4.0)
+    low = np.tanh(norm(low) * saturate) * weight
+    return lowpass(hit + low, 3500)
+
+
+def click(seconds=0.05, centre=2400.0, q=6.0):
+    n = int(seconds * SR)
+    k = t(seconds)
+    burst = noise(n) * np.exp(-k * 260.0)
+    return peak(burst, centre, q) + bandpass(burst, 1200, 6000) * 0.3
+
+
+def shriek_voice(seconds, start_hz, top_hz, end_hz=None):
+    n = int(seconds * SR)
+    k = t(seconds)
+    end_hz = end_hz or top_hz * 0.85
+    rise = np.minimum(k / 0.08, 1.0)
+    fall = np.clip((k - seconds * 0.7) / (seconds * 0.3), 0.0, 1.0)
+    f0 = start_hz + (top_hz - start_hz) * rise - (top_hz - end_hz) * fall
+    wobble = 1.0 + 0.045 * np.sin(2 * np.pi * 37.0 * k) + 0.02 * np.sin(2 * np.pi * 11.3 * k + 1.0) + 0.012 * lowpass(noise(n), 40) * 6.0
+    x = np.zeros(n)
+    for ratio, gain in ((1.0, 1.0), (1.122, 0.55), (1.414, 0.35), (2.0, 0.22)):
+        x += tone(f0 * ratio * wobble, n, rng.uniform(0, 6)) * gain
+    air = bandpass(noise(n), 2600, 7800) * 0.35
+    env = np.minimum(k / 0.025, 1.0) * np.minimum((seconds - k) / 0.18, 1.0)
+    return (x + air) * env
+
+
+def stream():
+    seconds = 14.0
+    n = int(seconds * SR)
+    tt = t(seconds)
+    mix = np.zeros((n, 2))
+    for ch in range(2):
+        flow = lowpass(noise(n), 900) * 0.5 + bandpass(noise(n), 300, 2200) * 0.35
+        flow *= 0.75 + 0.25 * np.sin(2 * np.pi * 0.21 * tt + ch) * np.sin(2 * np.pi * 0.07 * tt)
+        mix[:, ch] = flow
+        count = int(seconds * 38)
+        for i in range(count):
+            at = rng.uniform(0, seconds - 0.1)
+            d = int(rng.uniform(0.02, 0.07) * SR)
+            k = np.arange(d) / SR
+            drop = peak(noise(d) * np.exp(-k * rng.uniform(40, 90)), rng.uniform(380, 1500), rng.uniform(8, 18))
+            s = int(at * SR)
+            mix[s:s + d, ch] += drop * rng.uniform(0.3, 1.0) * 0.9
+    save("stream", loopable(mix, 1.0), 0.6, ogg=True)
+
+
+def voiced(f0, n, formants):
+    src = signal.sawtooth(2 * np.pi * np.cumsum(f0) / SR) + noise(n) * 0.15
+    out = np.zeros(n)
+    for f, q, g in formants:
+        out += peak(src, f, q) * g
+    return out
+
+
+def watcher_laugh():
+    seconds = 9.0
+    n = int(seconds * SR)
+    mix = np.zeros((n, 2))
+    at = 0.4
+    while at < seconds - 1.6:
+        count = int(rng.integers(4, 9))
+        base = rng.uniform(150, 230)
+        for i in range(count):
+            d = int(rng.uniform(0.09, 0.14) * SR)
+            k = np.linspace(0, 1, d)
+            f0 = base * (1.06 - 0.12 * k) * (1.0 - 0.025 * i)
+            ha = voiced(f0, d, ((680, 4, 1.0), (1650, 5, 0.6), (2600, 7, 0.25))) * 0.7 + bandpass(noise(d), 600, 3500) * 0.5
+            ha *= np.sin(k * np.pi) ** 0.8
+            s = int(at * SR)
+            pan = rng.uniform(-0.3, 0.3)
+            mix[s:s + d, 0] += ha * (1 - pan) * (0.9 - 0.06 * i)
+            mix[s:s + d, 1] += ha * (1 + pan) * (0.9 - 0.06 * i)
+            at += d / SR + rng.uniform(0.05, 0.1)
+        at += rng.uniform(0.9, 2.2)
+    mix = highpass(mix, 120)
+    out = np.stack([reverb(mix[:, 0], 1.6, 0.4), reverb(mix[:, 1], 1.6, 0.4)], axis=1)
+    save("watcher_laugh", loopable(out, 0.6), 0.6, ogg=True)
+
+
+def watcher_cry():
+    seconds = 11.0
+    n = int(seconds * SR)
+    mix = np.zeros((n, 2))
+    at = 0.3
+    while at < seconds - 2.5:
+        if rng.random() < 0.45:
+            d = int(rng.uniform(1.2, 2.0) * SR)
+            k = np.linspace(0, 1, d)
+            f0 = rng.uniform(380, 460) * (1.0 - 0.28 * k) * (1.0 + 0.03 * np.sin(2 * np.pi * 5.5 * k * d / SR))
+            wail = voiced(f0, d, ((520, 4, 1.0), (980, 5, 0.55), (2500, 7, 0.2))) * np.sin(k * np.pi) ** 0.6
+        else:
+            d = int(rng.uniform(0.7, 1.1) * SR)
+            k = np.linspace(0, 1, d)
+            wail = np.zeros(d)
+            for j in range(3):
+                a0 = int(j * d / 3.2)
+                dd = int(d / 4)
+                kk = np.linspace(0, 1, dd)
+                f0 = rng.uniform(300, 360) * (1.0 - 0.1 * kk)
+                wail[a0:a0 + dd] += voiced(f0, dd, ((560, 4, 1.0), (1100, 5, 0.5), (2600, 7, 0.2))) * np.sin(kk * np.pi)
+        gasp_d = int(0.35 * SR)
+        gk = np.linspace(0, 1, gasp_d)
+        gasp = bandpass(noise(gasp_d), 900, 4200) * np.sin(gk * np.pi) ** 2 * 0.5
+        s = int(at * SR)
+        mix[s:s + gasp_d, :] += gasp[:, None] * 0.7
+        s2 = s + gasp_d
+        mix[s2:s2 + d, 0] += wail * 0.85
+        mix[s2:s2 + d, 1] += wail
+        at += (gasp_d + d) / SR + rng.uniform(0.5, 1.5)
+    mix = highpass(mix, 140)
+    out = np.stack([reverb(mix[:, 0], 1.8, 0.45), reverb(mix[:, 1], 1.8, 0.45)], axis=1)
+    save("watcher_cry", loopable(out, 0.6), 0.6, ogg=True)
+
+
 ALL = {
     "wind_bed": wind_bed, "night_bed": night_bed, "whispers": whispers, "watcher_hum": watcher_hum, "heartbeat": heartbeat, "breath": breath,
     "scope_hum": scope_hum, "film_motor": film_motor, "crank": crank, "footfall": footfall, "colossus_voice": colossus_voice,
@@ -796,6 +928,7 @@ ALL = {
     "reacher_screech": reacher_screech,
     "watcher_sting": watcher_sting, "branch_crack": branch_crack, "death_hit": death_hit, "knock": knock, "metal_groan": metal_groan,
     "footsteps": footsteps, "small": small, "radio_tune": radio_tune, "music": music, "tension": tension, "chase": chase, "theme": theme,
+    "stream": stream, "watcher_laugh": watcher_laugh, "watcher_cry": watcher_cry,
 }
 
 if __name__ == "__main__":

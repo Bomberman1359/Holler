@@ -90,6 +90,15 @@ func _test_switches() -> void:
 				air.get_node("Sky").visible = false
 			"lamp":
 				Game.lamp_on = false
+			"cover":
+				cover.visible = false
+			"creatures":
+				for w: Node3D in watchers:
+					w.visible = false
+				if reacher:
+					reacher.visible = false
+				if colossus:
+					colossus.visible = false
 
 
 func _build_life() -> void:

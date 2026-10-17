@@ -17,7 +17,8 @@ const STRIDE_WALK := 1.5
 const STRIDE_RUN := 2.0
 const STRIDE_CREEP := 1.0
 const ZOOM_MAX := 8.0
-const SCOPE_DRAIN := 0.42
+const SCOPE_DRAIN := 0.8
+const IDLE_DRAIN := 0.05
 const BASE_FOV := 60.0
 const EYE := 1.65
 const EYE_CROUCHED := 0.95
@@ -89,14 +90,9 @@ func toggle_scope() -> void:
 
 func toggle_lamp() -> void:
 	Game.lamp_on = not Game.lamp_on
+	if Game.world and Game.world.get("sfx"):
+		Game.world.sfx.play("switch", -12.0, 1.35)
 	Rig.note("lamp", "on" if Game.lamp_on else "off")
-
-
-func _unhandled_input(event: InputEvent) -> void:
-	if Game.busy or frozen:
-		return
-	if event.is_action_pressed("lamp"):
-		toggle_lamp()
 
 
 func _process(delta: float) -> void:
@@ -121,6 +117,7 @@ func _process(delta: float) -> void:
 	shake = maxf(shake - delta * 0.55, 0.0)
 	cam.h_offset = randf_range(-1.0, 1.0) * shake * 0.12
 	cam.v_offset = randf_range(-1.0, 1.0) * shake * 0.16
+	Game.battery = maxf(Game.battery - IDLE_DRAIN * delta, 0.0)
 	if Game.scope_on:
 		Game.battery = maxf(Game.battery - SCOPE_DRAIN * Game.drain_mult * delta, 0.0)
 		if Game.battery <= 0.0:

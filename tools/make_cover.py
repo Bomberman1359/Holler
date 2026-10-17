@@ -67,7 +67,7 @@ def unit(v):
 
 def fern():
     m = Parts()
-    fronds = 8
+    fronds = 6
     for k in range(fronds):
         a = k / fronds * 2 * math.pi + rng.uniform(-0.3, 0.3)
         out = np.array([math.cos(a), 0.0, math.sin(a)])
@@ -76,33 +76,23 @@ def fern():
         rise = rng.uniform(0.3, 0.5)
         brown = rng.random() < 0.5
         base_col = np.array([0.36, 0.22, 0.1]) * rng.uniform(0.75, 1.05) if brown else np.array([0.14, 0.2, 0.08]) * rng.uniform(0.85, 1.15)
-        segs = 12
+        segs = 11
         ribs = []
         for i in range(segs + 1):
             t = i / segs
-            c = out * length * t + np.array([0.0, rise * math.sin(t * math.pi * 0.8) - 0.16 * t * t, 0.0])
-            ribs.append(c)
-        for i in range(segs):
+            ribs.append(out * length * t + np.array([0.0, rise * math.sin(t * math.pi * 0.8) - 0.16 * t * t, 0.0]))
+        for i in range(1, segs):
             t = i / segs
             c0, c1 = ribs[i], ribs[i + 1]
             ahead = unit(c1 - c0)
             up = unit(np.cross(side, ahead))
             shade = base_col * (0.6 + 0.5 * t)
             col = [shade[0], shade[1], shade[2], 1.0]
-            w = 0.012 * (1.0 - t) + 0.004
-            r0 = m.vert((c0 + side * w).tolist(), up.tolist(), [t, 0.45], col)
-            r1 = m.vert((c0 - side * w).tolist(), up.tolist(), [t, 0.55], col)
-            r2 = m.vert((c1 + side * w * 0.8).tolist(), up.tolist(), [t, 0.45], col)
-            r3 = m.vert((c1 - side * w * 0.8).tolist(), up.tolist(), [t, 0.55], col)
-            m.tri(r0, r2, r3)
-            m.tri(r0, r3, r1)
-            if i == 0:
-                continue
             leaf = 0.19 * math.sin(min(t + 0.08, 1.0) * math.pi) ** 0.8
             for sgn in (1.0, -1.0):
                 tip = c0 + side * sgn * leaf + ahead * leaf * 0.45 - up * leaf * 0.35
-                b0 = m.vert((c0 - ahead * 0.02).tolist(), up.tolist(), [t, 0.5], col)
-                b1 = m.vert((c0 + ahead * 0.05).tolist(), up.tolist(), [t, 0.5], col)
+                b0 = m.vert((c0 - ahead * 0.015).tolist(), up.tolist(), [t, 0.5], col)
+                b1 = m.vert((c0 + ahead * 0.06).tolist(), up.tolist(), [t, 0.5], col)
                 tt = m.vert(tip.tolist(), up.tolist(), [t, 0.0 if sgn > 0 else 1.0], [col[0] * 1.1, col[1] * 1.1, col[2] * 1.1, 1.0])
                 m.tri(b0, tt, b1)
     m.write("cover_fern")
@@ -146,7 +136,7 @@ def rock():
                                 (t, 0, -1), (t, 0, 1), (-t, 0, -1), (-t, 0, 1)]]
     faces = [(0, 11, 5), (0, 5, 1), (0, 1, 7), (0, 7, 10), (0, 10, 11), (1, 5, 9), (5, 11, 4), (11, 10, 2), (10, 7, 6), (7, 1, 8),
              (3, 9, 4), (3, 4, 2), (3, 2, 6), (3, 6, 8), (3, 8, 9), (4, 9, 5), (2, 4, 11), (6, 2, 10), (8, 6, 7), (9, 8, 1)]
-    for _ in range(2):
+    for _ in range(1):
         cache = {}
 
         def mid(a, b):
@@ -167,7 +157,7 @@ def rock():
         for k, (fq, amp) in enumerate(((2.3, 0.22), (4.9, 0.11), (9.7, 0.05))):
             bump += amp * math.sin(v[0] * fq + k * 1.7) * math.cos(v[1] * fq * 0.8 + k) * math.sin(v[2] * fq * 1.1 + 2.0 * k)
         flat = 1.0 if v[1] > -0.2 else 0.75
-        pts.append(v * bump * np.array([0.55, 0.32 * flat, 0.46]))
+        pts.append(v * bump * np.array([0.55, 0.46 * flat, 0.46]))
     pts = np.array(pts)
     normals = np.zeros_like(pts)
     for a, b, c in faces:
