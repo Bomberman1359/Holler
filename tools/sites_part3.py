@@ -162,7 +162,7 @@ def tunnel():
         k.beam((hx1 - 0.4, hh - 0.6, z), (hx1 - rng.uniform(2.5, 6.0), hh + rng.uniform(1.0, 4.0), z + rng.uniform(-0.8, 0.8)), 0.35, P.RUST, solid=False)
     k.decal("ruler_tall", (hx0 + 7.0, 9.0, hz0 + ht + 0.02), (0, 0, 1), 1.7, 18.0, sky=0.6)
     k.decal("ruler_tall", (hx1 - 7.0, 9.0, hz0 + ht + 0.02), (0, 0, 1), 1.7, 18.0, sky=0.6)
-    k.decal("wall_see_house", ((hx0 + hx1) / 2, 12.2, hz0 + ht + 0.02), (0, 0, 1), 8.0, sky=0.6)
+    k.decal("wall_see_house", ((hx0 + hx1) / 2, 7.2, hz0 + ht + 0.02), (0, 0, 1), 7.0, sky=0.6)
     lz = -28.0
     k.decal("paint_bar", (hx1 - ht, 8.0, lz), (-1, 0, 0), 15.0, 0.12, turn=HALF_PI, sky=0.6)
     for m in range(1, 16):
@@ -173,7 +173,7 @@ def tunnel():
             k.decal("h_%d" % m, (hx1 - ht, m + 0.02, lz + 2.85 + lw / 2), (-1, 0, 0), lw, sky=0.6)
     for key, h in (("d_194", 1.94), ("d_260", 2.60), ("d_610", 6.10)):
         k.decal("paint_bar", (hx1 - ht, h, lz - 0.5), (-1, 0, 0), 0.9, 0.07, tint=(0.95, 0.95, 0.9), sky=0.6)
-        k.decal(key, (hx1 - ht, h + 0.03, lz - 2.1), (-1, 0, 0), 2.2, sky=0.6)
+        k.decal(key, (hx1 - ht, h + 0.03, lz - 2.7), (-1, 0, 0), 3.1, sky=0.6)
     k.decal("hand_big", (hx1 - ht - 0.02, 12.5, -30.0), (-1, 0, 0), 4.2, sky=0.6)
     for (rx, rz) in ((64.0, -38.0), (76.0, -38.0), (64.0, -20.0), (76.0, -20.0)):
         k.box((rx - 1.0, 0.08, rz - 1.0), (rx + 1.0, 0.7, rz + 1.0), conc.but(sky=0.6))

@@ -116,21 +116,28 @@ func _draw_compass() -> void:
 	var half := 230.0
 	var per := 2.9
 	var font := UI.font("typed")
-	compass.draw_line(Vector2(cx - half, y), Vector2(cx + half, y), Color(1, 1, 1, 0.16), 1.0)
+	var lines := PackedVector2Array([Vector2(cx - half, y), Vector2(cx + half, y)])
+	var colors := PackedColorArray([Color(1, 1, 1, 0.16)])
 	var a := int(floor((heading - half / per) / 15.0)) * 15
 	while a <= heading + half / per:
 		var x := cx + (a - heading) * per
 		var fade := clampf(1.0 - pow(absf(x - cx) / half, 3.0), 0.0, 1.0)
 		var deg := posmod(a, 360)
+		var tick := 3.0
+		var alpha := 0.32
 		if deg % 90 == 0:
-			compass.draw_line(Vector2(x, y - 7.0), Vector2(x, y + 7.0), Color(1, 1, 1, 0.75 * fade), 1.5)
+			tick = 7.0
+			alpha = 0.75
 			compass.draw_string(font, Vector2(x - 20.0, y - 12.0), ["N", "E", "S", "W"][deg / 90], HORIZONTAL_ALIGNMENT_CENTER, 40.0, 21, Color(1, 1, 1, 0.92 * fade))
 		elif deg % 45 == 0:
-			compass.draw_line(Vector2(x, y - 5.0), Vector2(x, y + 5.0), Color(1, 1, 1, 0.5 * fade), 1.0)
+			tick = 5.0
+			alpha = 0.5
 			compass.draw_string(font, Vector2(x - 20.0, y - 11.0), ["NE", "SE", "SW", "NW"][(deg - 45) / 90], HORIZONTAL_ALIGNMENT_CENTER, 40.0, 14, Color(1, 1, 1, 0.55 * fade))
-		else:
-			compass.draw_line(Vector2(x, y - 3.0), Vector2(x, y + 3.0), Color(1, 1, 1, 0.32 * fade), 1.0)
+		lines.append(Vector2(x, y - tick))
+		lines.append(Vector2(x, y + tick))
+		colors.append(Color(1, 1, 1, alpha * fade))
 		a += 15
+	compass.draw_multiline_colors(lines, colors, 1.0)
 	var story: Node = Game.world.get("story") if Game.world else null
 	if story == null or Game.ended:
 		return

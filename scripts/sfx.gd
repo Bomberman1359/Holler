@@ -211,7 +211,6 @@ func _hold(sound: String, reach: float) -> Dictionary:
 	return v
 
 
-## Two voices follow the nearest watchers: the smiling one laughs, the frowning one cries, the faceless one whispers.
 func _watcher_voices(live: bool) -> void:
 	var world: Node = Game.world
 	var want: Array = []
@@ -243,7 +242,6 @@ func _watcher_voices(live: bool) -> void:
 			v.base_db = -80.0
 
 
-## The river, from the stretch of it nearest to you.
 func _water(live: bool) -> void:
 	if not live or Game.player == null or Terrain.river.is_empty():
 		water.base_db = -80.0
