@@ -4,6 +4,11 @@ const UI := preload("res://scripts/ui.gd")
 
 const W := 1280.0
 const H := 960.0
+const COMPASS_Y := 46.0
+const COMPASS_LINE := 32.0
+const COMPASS_H := 56.0
+const COMPASS_HALF := 230.0
+const COMPASS_PER := 2.9
 
 var counter: Label
 var films: Label
@@ -54,11 +59,7 @@ func _ready() -> void:
 	bars.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	bars.draw.connect(_draw_bars)
 	add_child(bars)
-	compass = Control.new()
-	compass.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	compass.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	compass.draw.connect(_draw_compass)
-	add_child(compass)
+	_build_compass()
 	run_ghost = UI.label(self, "RUN", "scrawl", 200, Vector2(0, 250), W, HORIZONTAL_ALIGNMENT_CENTER, Color(0.85, 0.8, 0.76, 0.22))
 	run_ghost.size.y = 330
 	run_ghost.visible = false
@@ -106,53 +107,80 @@ func _draw_bars() -> void:
 		bars.draw_string(font, Vector2(bx - 74.0, by + 9.0), "BREATH", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(1, 1, 1, 0.6 * a))
 
 
-func _draw_compass() -> void:
-	if not counter.visible or Game.player == null or Game.player.cam == null or not Game.player.cam.is_inside_tree():
-		return
-	var fwd: Vector3 = -Game.player.cam.global_basis.z
-	var heading := rad_to_deg(atan2(fwd.x, -fwd.z))
-	var cx := W * 0.5
-	var y := 46.0
-	var half := 230.0
-	var per := 2.9
+func _build_compass() -> void:
+	var strip := SubViewport.new()
+	strip.size = Vector2i(int(720.0 * COMPASS_PER) + 2, int(COMPASS_H))
+	strip.transparent_bg = true
+	strip.disable_3d = true
+	strip.render_target_update_mode = SubViewport.UPDATE_ONCE
+	var ink := Control.new()
+	ink.size = Vector2(strip.size)
+	ink.draw.connect(_draw_strip.bind(ink))
+	strip.add_child(ink)
+	add_child(strip)
+	var mat := ShaderMaterial.new()
+	mat.shader = preload("res://shaders/compass.gdshader")
+	mat.set_shader_parameter("strip", strip.get_texture())
+	mat.set_shader_parameter("per", COMPASS_PER)
+	mat.set_shader_parameter("strip_w", float(strip.size.x))
+	mat.set_shader_parameter("half_w", COMPASS_HALF)
+	mat.set_shader_parameter("rect_size", Vector2(COMPASS_HALF * 2.0 + 60.0, COMPASS_H))
+	mat.set_shader_parameter("line_y", COMPASS_LINE)
+	compass = ColorRect.new()
+	compass.material = mat
+	compass.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	compass.position = Vector2(W * 0.5 - COMPASS_HALF - 30.0, COMPASS_Y - COMPASS_LINE)
+	compass.size = Vector2(COMPASS_HALF * 2.0 + 60.0, COMPASS_H)
+	add_child(compass)
+
+
+func _draw_strip(ink: Control) -> void:
 	var font := UI.font("typed")
-	var lines := PackedVector2Array([Vector2(cx - half, y), Vector2(cx + half, y)])
+	var y := COMPASS_LINE
+	var lines := PackedVector2Array([Vector2(0.0, y), Vector2(ink.size.x, y)])
 	var colors := PackedColorArray([Color(1, 1, 1, 0.16)])
-	var a := int(floor((heading - half / per) / 15.0)) * 15
-	while a <= heading + half / per:
-		var x := cx + (a - heading) * per
-		var fade := clampf(1.0 - pow(absf(x - cx) / half, 3.0), 0.0, 1.0)
+	for step in range(0, 49):
+		var a := -180 + step * 15
+		var x := (a + 180) * COMPASS_PER
 		var deg := posmod(a, 360)
 		var tick := 3.0
 		var alpha := 0.32
 		if deg % 90 == 0:
 			tick = 7.0
 			alpha = 0.75
-			compass.draw_string(font, Vector2(x - 20.0, y - 12.0), ["N", "E", "S", "W"][deg / 90], HORIZONTAL_ALIGNMENT_CENTER, 40.0, 21, Color(1, 1, 1, 0.92 * fade))
+			ink.draw_string(font, Vector2(x - 20.0, y - 12.0), ["N", "E", "S", "W"][deg / 90], HORIZONTAL_ALIGNMENT_CENTER, 40.0, 21, Color(1, 1, 1, 0.92))
 		elif deg % 45 == 0:
 			tick = 5.0
 			alpha = 0.5
-			compass.draw_string(font, Vector2(x - 20.0, y - 11.0), ["NE", "SE", "SW", "NW"][(deg - 45) / 90], HORIZONTAL_ALIGNMENT_CENTER, 40.0, 14, Color(1, 1, 1, 0.55 * fade))
+			ink.draw_string(font, Vector2(x - 20.0, y - 11.0), ["NE", "SE", "SW", "NW"][(deg - 45) / 90], HORIZONTAL_ALIGNMENT_CENTER, 40.0, 14, Color(1, 1, 1, 0.55))
 		lines.append(Vector2(x, y - tick))
 		lines.append(Vector2(x, y + tick))
-		colors.append(Color(1, 1, 1, alpha * fade))
-		a += 15
-	compass.draw_multiline_colors(lines, colors, 1.0)
+		colors.append(Color(1, 1, 1, alpha))
+	ink.draw_multiline_colors(lines, colors, 1.0)
+
+
+func _update_compass() -> void:
+	var on: bool = counter.visible and Game.player != null and Game.player.cam != null and Game.player.cam.is_inside_tree()
+	compass.visible = on
+	if not on:
+		return
+	var mat := compass.material as ShaderMaterial
+	var fwd: Vector3 = -Game.player.cam.global_basis.z
+	var heading := fposmod(rad_to_deg(atan2(fwd.x, -fwd.z)), 360.0)
+	mat.set_shader_parameter("heading", heading)
 	var story: Node = Game.world.get("story") if Game.world else null
-	if story == null or Game.ended:
-		return
-	var to: Vector3 = story.stop_point(story.next_stop()) - Game.player.global_position
-	if Vector2(to.x, to.z).length() < 60.0:
-		return
-	var rel := wrapf(rad_to_deg(atan2(to.x, -to.z)) - heading, -180.0, 180.0)
-	var mark := Color(1.0, 0.86, 0.6, 0.9)
-	if absf(rel) * per <= half:
-		var x := cx + rel * per
-		compass.draw_colored_polygon(PackedVector2Array([Vector2(x, y + 9.0), Vector2(x - 6.0, y + 19.0), Vector2(x + 6.0, y + 19.0)]), mark)
-	else:
-		var side := signf(rel)
-		var x := cx + side * (half + 14.0)
-		compass.draw_colored_polygon(PackedVector2Array([Vector2(x + side * 7.0, y), Vector2(x - side * 5.0, y - 7.0), Vector2(x - side * 5.0, y + 7.0)]), mark)
+	var mark_on := 0.0
+	if story != null and not Game.ended:
+		var to: Vector3 = story.stop_point(story.next_stop()) - Game.player.global_position
+		if Vector2(to.x, to.z).length() >= 60.0:
+			mark_on = 1.0
+			var rel := wrapf(rad_to_deg(atan2(to.x, -to.z)) - heading, -180.0, 180.0)
+			if absf(rel) * COMPASS_PER <= COMPASS_HALF:
+				mat.set_shader_parameter("mark_x", rel * COMPASS_PER)
+				mat.set_shader_parameter("mark_side", 0.0)
+			else:
+				mat.set_shader_parameter("mark_side", signf(rel))
+	mat.set_shader_parameter("mark_on", mark_on)
 
 
 func _build_paper() -> void:
@@ -314,7 +342,7 @@ func _process(delta: float) -> void:
 	prompt.text = story.prompt() if story and not Game.dead else ""
 	_breath_shown = move_toward(_breath_shown, 1.0 if (Game.stamina < 0.995 and plain) else 0.0, delta * (4.0 if Game.stamina < 0.995 else 0.8))
 	bars.queue_redraw()
-	compass.queue_redraw()
+	_update_compass()
 	if keys_left > 0.0:
 		keys_left -= delta
 		keys.modulate.a = clampf(keys_left / 2.0, 0.0, 1.0) if plain else 0.0

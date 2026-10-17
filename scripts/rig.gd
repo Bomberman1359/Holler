@@ -483,6 +483,7 @@ func _parts() -> void:
 		"hud": [main.hud],
 		"compass": [main.hud.compass],
 	}
+	var hushed: Array[AudioStreamPlayer] = []
 	var was := {}
 	for key: String in parts:
 		for n: Variant in parts[key]:
@@ -505,6 +506,10 @@ func _parts() -> void:
 		for c: String in cases:
 			for n: Variant in was:
 				n.visible = was[n]
+			for p: AudioStreamPlayer in hushed:
+				p.stream_paused = false
+			hushed.clear()
+			world.sfx.process_mode = Node.PROCESS_MODE_INHERIT
 			world.terrain.hide_all = false
 			main.set_film(true)
 			Game.lamp_on = true
@@ -529,6 +534,12 @@ func _parts() -> void:
 					main.set_render_size(1)
 				"size_1280":
 					main.set_render_size(3)
+				"no_sound":
+					world.sfx.process_mode = Node.PROCESS_MODE_DISABLED
+					for p: AudioStreamPlayer in get_tree().root.find_children("*", "AudioStreamPlayer", true, false):
+						if not p.stream_paused:
+							p.stream_paused = true
+							hushed.append(p)
 				_:
 					if c.begins_with("no_") and parts.has(c.substr(3)):
 						off = [c.substr(3)]
@@ -543,6 +554,9 @@ func _parts() -> void:
 			span_end()
 	for n: Variant in was:
 		n.visible = was[n]
+	for p: AudioStreamPlayer in hushed:
+		p.stream_paused = false
+	world.sfx.process_mode = Node.PROCESS_MODE_INHERIT
 	world.terrain.hide_all = false
 	main.set_film(true)
 	Game.lamp_on = true
