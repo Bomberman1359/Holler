@@ -28,6 +28,7 @@ var _next_shot := 0.0
 var _tasks: Array[int] = []
 var _rec: AudioEffectRecord
 var _rec_bus := -1
+var _rec_fx := 0
 var _audio_n := 0
 var _audio_cut := 0.0
 var _audio_len := 60.0
@@ -120,6 +121,7 @@ func _ready() -> void:
 		_rec.format = AudioStreamWAV.FORMAT_16_BITS
 		_rec_bus = 0
 		AudioServer.add_bus_effect(_rec_bus, _rec)
+		_rec_fx = AudioServer.get_bus_effect_count(_rec_bus)
 		_rec.set_recording_active(true)
 		_audio_cut = now()
 		note("audio", "audio_%03d.wav" % _audio_n, "start")
@@ -299,6 +301,11 @@ func _process(_delta: float) -> void:
 	if every > 0.0 and t >= _next_shot and plan != "tour":
 		_next_shot = t + every
 		shoot("t%04d" % int(t))
+	if _rec and AudioServer.get_bus_effect_count(_rec_bus) != _rec_fx:
+		_rec_fx = AudioServer.get_bus_effect_count(_rec_bus)
+		_rec.set_recording_active(true)
+		_audio_cut = t
+		note("audio", "audio_%03d.wav" % _audio_n, "restart")
 	if _rec and t - _audio_cut >= _audio_len:
 		_cut_audio(true)
 	_flush_log()
