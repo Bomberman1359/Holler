@@ -36,6 +36,7 @@ var _span_from := 0
 var _span_t := 0.0
 var _span_calls := 0.0
 var _span_prims := 0.0
+var _span_objs := 0.0
 var _span_rows := 0
 var _error_count := 0
 var _warning_count := 0
@@ -107,7 +108,7 @@ func _ready() -> void:
 	_shots = FileAccess.open(out.path_join("shots.csv"), FileAccess.WRITE)
 	_shots.store_line("t,file,label,x,y,z")
 	_spans = FileAccess.open(out.path_join("spans.csv"), FileAccess.WRITE)
-	_spans.store_line("name,seconds,frames,fps,median_ms,worst_ms,draw_calls,primitives,hidden_frames,script_ms")
+	_spans.store_line("name,seconds,frames,fps,median_ms,worst_ms,draw_calls,primitives,hidden_frames,script_ms,objects")
 	_errors = FileAccess.open(out.path_join("errors.log"), FileAccess.WRITE)
 	if ClassDB.class_exists("Logger"):
 		_logger = (load("res://scripts/rig_logger.gd") as GDScript).new()
@@ -319,6 +320,7 @@ func _row() -> void:
 	if _span_name != "":
 		_span_calls += calls
 		_span_prims += prims
+		_span_objs += Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME)
 		_span_rows += 1
 	_sec_frames = 0
 	_sec_time = 0.0
@@ -355,6 +357,7 @@ func span_begin(span_name: String) -> void:
 	_span_t = now()
 	_span_calls = 0.0
 	_span_prims = 0.0
+	_span_objs = 0.0
 	_span_rows = 0
 	_span_hidden = _hidden
 	_script_usec = 0
@@ -368,8 +371,8 @@ func span_end() -> void:
 	var part := _all.slice(_span_from)
 	var s := _stats(part)
 	var rows := maxf(_span_rows, 1.0)
-	_spans.store_line("%s,%.1f,%d,%.1f,%.2f,%.2f,%d,%d,%d,%.2f" % [_span_name, now() - _span_t, part.size(), s.fps, s.median * 1000.0, s.worst * 1000.0,
-			_span_calls / rows, _span_prims / rows, _hidden - _span_hidden, _script_usec / 1000.0 / maxf(_script_frames, 1.0)])
+	_spans.store_line("%s,%.1f,%d,%.1f,%.2f,%.2f,%d,%d,%d,%.2f,%d" % [_span_name, now() - _span_t, part.size(), s.fps, s.median * 1000.0, s.worst * 1000.0,
+			_span_calls / rows, _span_prims / rows, _hidden - _span_hidden, _script_usec / 1000.0 / maxf(_script_frames, 1.0), _span_objs / rows])
 	_spans.flush()
 	_span_name = ""
 
@@ -467,13 +470,27 @@ func _parts() -> void:
 	cam.fov = 60.0
 	world.add_child(cam)
 	var parts := {
-		"near": world.forest.get_node("TreesNear"),
-		"far": world.forest.get_node("TreesFar"),
-		"ground": world.terrain.near_mesh,
-		"sky": world.air.get_node("Sky"),
+		"near": [world.forest.get_node("TreesNear")],
+		"far": [world.forest.get_node("TreesFar")],
+		"ground": [world.terrain.near_mesh],
+		"sky": [world.air.get_node("Sky")],
+		"cover": [world.cover],
+		"sites": world.sites.values(),
+		"stakes": [world.get_node_or_null("Stakes")],
+		"water": [world.water],
+		"creatures": [world.colossus, world.reacher] + world.watchers,
+		"colossus": [world.colossus],
+		"hud": [main.hud],
+		"compass": [main.hud.compass],
 	}
+	var was := {}
+	for key: String in parts:
+		for n: Variant in parts[key]:
+			if n != null:
+				was[n] = n.visible
 	var usual_size: int = Game.render_size
 	var places: String = opt("only", "w01,t05,v03")
+	var cases: Array = String(opt("cases", "all,no_film,no_near,no_far,no_ground,no_sky,no_lamp,only_ground,nothing,size_640,size_800,size_1280")).split(",")
 	for m: Node3D in get_tree().get_nodes_in_group("shot_cam"):
 		var wanted := false
 		for key in places.split(","):
@@ -484,51 +501,51 @@ func _parts() -> void:
 		cam.global_transform = m.global_transform
 		world.forest.warm(m.global_position)
 		cam.make_current()
-		var short := String(m.name).substr(0, 3)
-		var cases := ["all", "no_film", "no_near", "no_far", "no_ground", "no_sky", "no_lamp", "only_ground", "nothing", "size_640", "size_800", "size_1280"]
+		var short := String(m.name).substr(0, 3) if places == "w01,t05,v03" else String(m.name)
 		for c: String in cases:
-			for key: String in parts:
-				(parts[key] as Node3D).visible = true
+			for n: Variant in was:
+				n.visible = was[n]
 			world.terrain.hide_all = false
 			main.set_film(true)
 			Game.lamp_on = true
 			main.set_render_size(usual_size)
+			var off: Array = []
 			match c:
 				"no_film":
 					main.set_film(false)
-				"no_near":
-					parts["near"].visible = false
-				"no_far":
-					parts["far"].visible = false
-				"no_ground":
-					world.terrain.hide_all = true
-					parts["ground"].visible = false
-				"no_sky":
-					parts["sky"].visible = false
 				"no_lamp":
 					Game.lamp_on = false
+				"no_ground":
+					world.terrain.hide_all = true
+					off = ["ground"]
 				"only_ground":
-					parts["near"].visible = false
-					parts["far"].visible = false
-					parts["sky"].visible = false
+					off = ["near", "far", "sky"]
 				"nothing":
 					world.terrain.hide_all = true
-					for key: String in parts:
-						(parts[key] as Node3D).visible = false
+					off = ["near", "far", "ground", "sky"]
 				"size_640":
 					main.set_render_size(0)
 				"size_800":
 					main.set_render_size(1)
 				"size_1280":
 					main.set_render_size(3)
+				_:
+					if c.begins_with("no_") and parts.has(c.substr(3)):
+						off = [c.substr(3)]
+			for key: String in off:
+				for n: Variant in parts[key]:
+					if n != null:
+						n.visible = false
 			tag = "settle"
 			await wait(0.5)
 			span_begin("%s_%s" % [short, c])
 			await wait(opt("hold", 2.0))
 			span_end()
-	for key: String in parts:
-		(parts[key] as Node3D).visible = true
+	for n: Variant in was:
+		n.visible = was[n]
+	world.terrain.hide_all = false
 	main.set_film(true)
+	Game.lamp_on = true
 	main.set_render_size(usual_size)
 
 

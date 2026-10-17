@@ -410,6 +410,13 @@ func _clear(a: Vector3, b: Vector3) -> bool:
 	var q := PhysicsRayQueryParameters3D.create(a + Vector3(0, 1.0, 0), b + Vector3(0, 1.0, 0), 1, skip)
 	if not space.intersect_ray(q).is_empty():
 		return false
+	var flat := Vector3(b.x - a.x, 0.0, b.z - a.z)
+	if flat.length() > 0.05:
+		var side := Vector3(-flat.z, 0.0, flat.x).normalized() * 0.5
+		for s: float in [-1.0, 1.0]:
+			var edge := PhysicsRayQueryParameters3D.create(a + side * s + Vector3(0, 0.9, 0), b + side * s + Vector3(0, 0.9, 0), 1, skip)
+			if not space.intersect_ray(edge).is_empty():
+				return false
 	for f: float in [0.3, 0.55, 0.8]:
 		var p := a.lerp(b, f)
 		var down := PhysicsRayQueryParameters3D.create(p + Vector3(0, 0.6, 0), p + Vector3(0, -1.4, 0), 1, skip)

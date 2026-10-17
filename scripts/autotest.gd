@@ -472,9 +472,13 @@ func _chases() -> void:
 
 	var tunnel: Node3D = story.site("tunnel")
 	check("tunnel chase: the film can be taken", await _take_again(story, 5))
-	var came := await wait_until(func() -> bool: return reacher.visible and Vector2(reacher.global_position.x - tunnel.mark("way_3").x, reacher.global_position.z - tunnel.mark("way_3").z).length() < 4.0, 900)
+	var came := await wait_until(func() -> bool: return reacher.visible and tunnel.to_local(reacher.global_position).x > tunnel.to_local(tunnel.mark("way_3")).x - 0.6, 900)
+	if not came:
+		print("    reacher at %s (site), state %d, velocity %s, on wall %s, steer to %s (site)" % [tunnel.to_local(reacher.global_position).snappedf(0.01), reacher.state, reacher.velocity.snappedf(0.01), reacher.is_on_wall(), tunnel.to_local(reacher._steer(Game.player.global_position)).snappedf(0.01)])
 	check("tunnel chase: it comes out of the office door where you can see it", came)
 	var near := await wait_until(func() -> bool: return reacher.global_position.distance_to(Game.player.global_position) < 6.0, 900)
+	if not near:
+		print("    reacher at %s (site), state %d, velocity %s, on wall %s, steer to %s (site)" % [tunnel.to_local(reacher.global_position).snappedf(0.01), reacher.state, reacher.velocity.snappedf(0.01), reacher.is_on_wall(), tunnel.to_local(reacher._steer(Game.player.global_position)).snappedf(0.01)])
 	check("tunnel chase: it reaches the camera", near)
 	reacher.sleep()
 	story.chase = {}
