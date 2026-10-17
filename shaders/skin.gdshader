@@ -66,13 +66,17 @@ void fragment() {
 	vec3 eye = CAMERA_POSITION_WORLD;
 	vec3 n = normalize(wn);
 	vec3 p = rest * pattern;
-	float blotch = vnoise(p * 6.0) * 0.6 + vnoise(p * 17.0) * 0.4;
-	float net = abs(vnoise(p * vec3(11.0, 5.0 * vein_stretch, 11.0) + 3.7) - 0.5);
-	float vein = smoothstep(0.035, 0.0, net) * smoothstep(0.35, 0.7, vnoise(p * 2.3 + 9.1)) * veins;
 	float metal = step(0.37, shine) * step(shine, 0.43);
-	vein *= 1.0 - metal;
-	vec3 albedo = paint.rgb * mix(tint, vec3(1.0), metal) * (0.74 + 0.5 * mix(blotch, vnoise(rest * 2.1) * 0.7 + 0.3, metal));
-	albedo = mix(albedo, albedo * vein_color * 1.6, vein);
+	vec3 albedo;
+	if (metal > 0.5) {
+		albedo = paint.rgb * (0.74 + 0.5 * (vnoise(rest * 2.1) * 0.7 + 0.3));
+	} else {
+		float blotch = vnoise(p * 6.0) * 0.6 + vnoise(p * 17.0) * 0.4;
+		float net = abs(vnoise(p * vec3(11.0, 5.0 * vein_stretch, 11.0) + 3.7) - 0.5);
+		float vein = smoothstep(0.035, 0.0, net) * smoothstep(0.35, 0.7, vnoise(p * 2.3 + 9.1)) * veins;
+		albedo = paint.rgb * tint * (0.74 + 0.5 * blotch);
+		albedo = mix(albedo, albedo * vein_color * 1.6, vein);
+	}
 	if (close_detail > 0.0) {
 		float near = (1.0 - smoothstep(12.0, 70.0, distance(eye, wpos))) * close_detail * (1.0 - metal);
 		if (near > 0.001) {
@@ -83,8 +87,11 @@ void fragment() {
 	}
 	float open = mix(0.22, 1.0, paint.a);
 	vec3 lit = albedo * (night_light(wpos, n, 0.3, 1.0) * open + own_light * (0.5 + 0.5 * open));
-	lit += night_gloss(wpos, n, eye, 0.55 - 0.4 * shine) * (wet + shine * (1.0 - metal)) * open;
-	lit += night_gloss(wpos, n, eye, 0.3) * metal * 0.6;
+	if (metal > 0.5) {
+		lit += night_gloss(wpos, n, eye, 0.55 - 0.4 * shine) * wet * open + night_gloss(wpos, n, eye, 0.3) * 0.6;
+	} else {
+		lit += night_gloss(wpos, n, eye, 0.55 - 0.4 * shine) * (wet + shine) * open;
+	}
 	vec3 v = normalize(eye - wpos);
 	float edge = 1.0 - max(dot(n, v), 0.0);
 	lit += albedo * (edge * edge * edge) * rim * (sky_light.rgb * 3.0 + moon_light.rgb);

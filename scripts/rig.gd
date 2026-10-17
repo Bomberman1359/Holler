@@ -482,12 +482,20 @@ func _parts() -> void:
 		"colossus": [world.colossus],
 		"hud": [main.hud],
 		"compass": [main.hud.compass],
+		"story": [world.story],
+		"sfx": [world.sfx],
+		"forest": [world.forest],
+		"terrain": [world.terrain],
+		"air": [world.air],
+		"watchers": world.watchers,
+		"reacher": [world.reacher],
 	}
 	var hushed: Array[AudioStreamPlayer] = []
+	var stilled: Array[Node] = []
 	var was := {}
 	for key: String in parts:
 		for n: Variant in parts[key]:
-			if n != null:
+			if n != null and "visible" in n:
 				was[n] = n.visible
 	var usual_size: int = Game.render_size
 	var places: String = opt("only", "w01,t05,v03")
@@ -510,6 +518,9 @@ func _parts() -> void:
 				p.stream_paused = false
 			hushed.clear()
 			world.sfx.process_mode = Node.PROCESS_MODE_INHERIT
+			for n: Node in stilled:
+				n.process_mode = Node.PROCESS_MODE_INHERIT
+			stilled.clear()
 			world.terrain.hide_all = false
 			main.set_film(true)
 			Game.lamp_on = true
@@ -543,9 +554,14 @@ func _parts() -> void:
 				_:
 					if c.begins_with("no_") and parts.has(c.substr(3)):
 						off = [c.substr(3)]
+					if c.begins_with("still_") and parts.has(c.substr(6)):
+						for n: Variant in parts[c.substr(6)]:
+							if n != null:
+								n.process_mode = Node.PROCESS_MODE_DISABLED
+								stilled.append(n)
 			for key: String in off:
 				for n: Variant in parts[key]:
-					if n != null:
+					if n != null and "visible" in n:
 						n.visible = false
 			tag = "settle"
 			await wait(0.5)
@@ -557,6 +573,8 @@ func _parts() -> void:
 	for p: AudioStreamPlayer in hushed:
 		p.stream_paused = false
 	world.sfx.process_mode = Node.PROCESS_MODE_INHERIT
+	for n: Node in stilled:
+		n.process_mode = Node.PROCESS_MODE_INHERIT
 	world.terrain.hide_all = false
 	main.set_film(true)
 	Game.lamp_on = true
