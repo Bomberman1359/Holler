@@ -262,15 +262,16 @@ def place_setting(k, sky=0.06):
     k.box((-0.2, 0.0, -0.01), (-0.06, 0.006, 0.012), IRON.but(sky=sky, tint=(0.8, 0.8, 0.8)), solid=False)
 
 
-def bed(k, length=2.0, width=0.9, sky=0.06, made=True, mattress=True, seed=0):
+def bed(k, length=2.0, width=0.9, sky=0.06, made=True, mattress=True, seed=0, tall=1.0):
     rng = np.random.default_rng(seed)
     fr = ENAMEL.but(sky=sky)
-    h = 0.5
-    for sz, top in ((-length / 2, 1.05), (length / 2, 0.8)):
+    h = 0.5 * tall
+    r = 0.02 * tall
+    for sz, top in ((-length / 2, 1.05 * tall), (length / 2, 0.8 * tall)):
         for sx in (-1, 1):
-            k.tube([(sx * width / 2, 0, sz), (sx * width / 2, top, sz)], [0.02, 0.02], 6, fr, solid=False)
-        k.tube([(-width / 2, top, sz), (width / 2, top, sz)], [0.02, 0.02], 6, fr, solid=False)
-        k.tube([(-width / 2, h + 0.12, sz), (width / 2, h + 0.12, sz)], [0.014, 0.014], 5, fr, solid=False)
+            k.tube([(sx * width / 2, 0, sz), (sx * width / 2, top, sz)], [r, r], 6, fr, solid=False)
+        k.tube([(-width / 2, top, sz), (width / 2, top, sz)], [r, r], 6, fr, solid=False)
+        k.tube([(-width / 2, h + 0.12, sz), (width / 2, h + 0.12, sz)], [r * 0.7, r * 0.7], 5, fr, solid=False)
         n = max(int(width / 0.16), 3)
         for i in range(1, n):
             x = -width / 2 + width * i / n
@@ -583,7 +584,7 @@ def tank(k, sky=1.0, gun_pitch=0.9, turret_yaw=0.4, blown=False):
             k.tube([(0, 0.4, 1.3), (0, 0.52, 4.3)], [0.1, 0.075], 8, dark)
         k.tube([(0, 1.5, 0.2), (0, 1.56, 0.2)], [1.02, 1.02], 14, dark, solid=False)
         k.decal("soot_1", (0, 1.585, 0.2), (0, 1, 0), 3.0, 3.0, sky=sky)
-        k.decal("soot_0", (0.96, 1.1, -0.6), (1, 0.1, 0), 2.6, 1.3, sky=sky)
+        k.decal("soot_0", (0.96, 1.1, -0.6), (1, 0.1, 0), 2.2, 0.95, sky=sky)
     else:
         with k.at(0, 1.5, 0.2, yaw=turret_yaw):
             turret()

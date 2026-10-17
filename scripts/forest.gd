@@ -191,7 +191,7 @@ func _cell_trunks(c: Vector2i) -> PackedVector3Array:
 			var o := (from + k) * ROW
 			var tall := buf[o + 5]
 			var kind := buf[o + 16]
-			out.append(Vector3(buf[o + 3], buf[o + 11], tall * (0.07 if kind > 2.5 else TRUNK * 1.15)))
+			out.append(Vector3(buf[o + 3], buf[o + 11], tall * (0.15 if kind > 2.5 else TRUNK * 1.15)))
 	trunks[c] = out
 	return out
 

@@ -191,10 +191,21 @@ def church():
     with k.at(8.5, 0.1, z0 + t + 0.42, yaw=0.0):
         P.locker(k, sky=0.3, m=P.DARK_BOARDS)
         k.mark("hide", (0, 0.2, 0.0), yaw=0.0)
-    k.decal("hand_big", (14.0, 5.1, z1 - t - 0.02), (0, 0, -1), 2.4, sky=0.55)
-    k.decal("hand_drag", (9.5, 4.2, z0 + t + 0.02), (0, 0, 1), 2.2, sky=0.55)
+    k.decal("hand_big", (12.0, 4.6, z1 - t - 0.02), (0, 0, -1), 2.4, sky=0.55)
+    k.decal("hand_drag", (12.0, 4.0, z0 + t + 0.02), (0, 0, 1), 2.2, sky=0.55)
     k.decal("smear_0", (12.0, 0.12, 0.6), (0, 1, 0), 5.0, 1.6, up=(1, 0, 0), sky=0.55)
     k.decal("pool_1", (15.2, 0.12, 0.3), (0, 1, 0), 1.6, sky=0.55)
+    k.decal("drag_long", (7.6, 0.125, -0.4), (0, 1, 0), 9.5, 1.1, up=(1, 0, 0), sky=0.55)
+    k.decal("pool_0", (19.4, 0.13, -0.6), (0, 1, 0), 2.2, sky=0.55)
+    k.decal("pool_2", (8.3, 0.13, -3.3), (0, 1, 0), 1.3, sky=0.55)
+    k.decal("spatter_0", (x1 - 3.42, 0.62, 0.2), (-1, 0, 0), 0.95, sky=0.55)
+    k.decal("spatter_1", (16.6, 1.3, z1 - t - 0.02), (0, 0, -1), 1.7, sky=0.55)
+    k.decal("spatter_0", (7.3, 1.1, z0 + t + 0.02), (0, 0, 1), 1.5, sky=0.55)
+    k.decal("hand_drag", (3.4, 1.0, z1 - t - 0.02), (0, 0, -1), 0.9, sky=0.55)
+    k.decal("hand_big", (17.2, 1.3, z0 + t + 0.02), (0, 0, 1), 0.7, sky=0.55)
+    k.decal("smear_2", (-0.5, 0.13, 0.2), (0, 1, 0), 3.0, 1.0, up=(1, 0, 0), sky=0.2)
+    k.decal("pool_2", (-3.7, 0.12, 0.3), (0, 1, 0), 0.9)
+    k.decal("spatter_1", (ax1 - tt - 0.02, 1.2, -1.75), (-1, 0, 0), 1.0, sky=0.2)
     with k.at(6.0, 0.1, 0.4, yaw=HALF_PI):
         P.camera_tripod(k, 0.55)
         k.mark("camera", (0, 1.5, 0))
@@ -216,6 +227,8 @@ def church():
                 k.box((-0.3, -0.2, -0.07), (0.3, 0.85, 0.07), stone)
     k.mark("door", (ax0 - 2.0, 0.2, 0.0))
     k.mark("nave", (10.0, 0.2, 0.0))
+    for n, x in enumerate((15.0, 10.0, 4.2, -0.5, ax0 - 2.2, ax0 - 6.0)):
+        k.mark("way_%d" % n, (x, 0.2, 0.0))
     k.mark("reacher_home", (17.0, 0.2, -1.0))
     return k
 
@@ -254,7 +267,18 @@ def prop_battery():
     return k
 
 
-SITES = {"prop_battery": prop_battery, "spawn": spawn, "gasthaus": gasthaus, "church": church, "church_roof": church_roof,
+def prop_stake():
+    k = Kit("prop_stake", (0.0, 0.0), base=0.0)
+    k.box((-0.035, -0.35, -0.035), (0.035, 1.22, 0.035), P.TIMBER, solid=False)
+    k.box((-0.038, 0.92, -0.038), (0.038, 1.1, 0.038), P.ENAMEL.but(tint=(0.86, 0.84, 0.78)), solid=False)
+    cloth = P.SHEET.but(tint=(0.82, 0.8, 0.72))
+    strip = [(0.036, 1.19, 0.0), (0.036, 1.13, 0.0), (0.27, 1.02, 0.05), (0.31, 1.09, 0.06)]
+    k.face(strip, cloth, solid=False)
+    k.face(strip[::-1], cloth, solid=False)
+    return k
+
+
+SITES = {"prop_battery": prop_battery, "prop_stake": prop_stake, "spawn": spawn, "gasthaus": gasthaus, "church": church, "church_roof": church_roof,
          "bomber": sites_part2.bomber, "sanatorium": sites_part2.sanatorium, "radar": sites_part2.radar,
          "ford": sites_part3.ford, "tunnel": sites_part3.tunnel, "lookout": sites_part3.lookout, "lookout_roof": sites_part3.lookout_roof}
 
@@ -263,8 +287,12 @@ def main():
     want = sys.argv[1:] or list(SITES)
     out = maplib.out_dir("sites")
     for name in want:
-        info = SITES[name]().write()
+        kit = SITES[name]()
+        info = kit.write()
         print("%-12s %6d triangles, %d marks, %d lamps" % (name, info["triangles"], len(info["marks"]), len(info["glows"])))
+        for decal, at, backed in kit.loose_decals():
+            if not decal.startswith("glass"):
+                print("    %s at %s is only %d%% on a surface" % (decal, at, backed * 100))
     with open(os.path.join(out, "index.json"), "w") as f:
         json.dump(sorted(n[:-5] for n in os.listdir(out) if n.endswith(".json") and n != "index.json" and not n.startswith("prop_")), f)
     keep_out(out)

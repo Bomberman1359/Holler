@@ -8,7 +8,7 @@ import sys
 import numpy as np
 
 import maplib
-from sculpt import Body
+from sculpt import Body, Hard
 
 PALE = (0.50, 0.485, 0.45)
 DARK = (0.035, 0.025, 0.025)
@@ -293,6 +293,10 @@ def colossus(name="colossus", tall=340.0):
     b.bone("arm_l", "chest", P(-30, sh_y, 0))
     b.bone("fore_l", "arm_l", P(-36, 172, 3))
     b.bone("hand_l", "fore_l", P(-38, 70, -2))
+    fingers = ((-5.0, 36.0), (0.0, 42.0), (5.0, 33.0))
+    for f, (dz, reach) in enumerate(fingers):
+        b.bone("finger%d" % f, "hand_l", P(-38, 56, -2 + dz * 0.6))
+        b.bone("finger%db" % f, "finger%d" % f, P(-39.5, 56 - reach * 0.55, -2 + dz * 1.3))
     b.bone("arm_r", "chest", P(30, sh_y, 0))
     b.bone("arm3", "chest", P(-17, 262, 15))
     b.bone("fore3", "arm3", P(-25, 208, 30))
@@ -341,8 +345,10 @@ def colossus(name="colossus", tall=340.0):
     b.ball("fore_l", P(-36, 172, 4), 4.7 * u, k=2 * u)
     b.capsule("fore_l", P(-36, 172, 3), P(-38, 70, -2), 4.1 * u, 2.9 * u, k=3 * u)
     b.ball("hand_l", P(-38, 62, -2), 5.2 * u, (0.6, 1.3, 1.0), k=2.5 * u)
-    for f, (dz, reach) in enumerate(((-5.0, 36.0), (0.0, 42.0), (5.0, 33.0))):
-        b.chain("hand_l", [P(-38, 56, -2 + dz * 0.6), P(-39.5, 56 - reach * 0.55, -2 + dz * 1.3), P(-35, 56 - reach, -2 + dz * 1.5 - 5)], [2.6 * u, 2.1 * u, 0.5 * u], k=1.6 * u)
+    for f, (dz, reach) in enumerate(fingers):
+        knuckle, joint, tip = P(-38, 56, -2 + dz * 0.6), P(-39.5, 56 - reach * 0.55, -2 + dz * 1.3), P(-35, 56 - reach, -2 + dz * 1.5 - 5)
+        b.capsule("finger%d" % f, knuckle, joint, 2.6 * u, 2.1 * u, k=1.6 * u)
+        b.capsule("finger%db" % f, joint, tip, 2.1 * u, 0.5 * u, k=1.6 * u)
         b.paint_capsule(P(-39.5, 56 - reach * 0.5, -2 + dz * 1.3), P(-35, 56 - reach, -2 + dz * 1.5 - 5), 3.2 * u, BONE, 0.7, shine=0.5)
     b.capsule("arm_r", P(30, sh_y, 0), P(35, 190, 2), 5.4 * u, 3.6 * u, k=3.5 * u)
     b.ball("arm_r", P(35.5, 186, 2), 4.0 * u, (1.0, 0.7, 1.0), k=2 * u)
@@ -382,6 +388,121 @@ def colossus(name="colossus", tall=340.0):
     for sx, bone in ((-1, "mouth_l"), (1, "mouth_r")):
         b.capsule(bone, P(sx * 4.2, top - 3, -13.5), P(sx * 4.5, 292, -8.5), 3.4 * u, 3.0 * u, k=3 * u)
         b.capsule(bone, P(sx * 4.5, 292, -8.0), P(sx * 5.5, bottom + 2, -13), 3.0 * u, 3.6 * u, k=3 * u)
+    for (x, y, z, r) in ((9, 226, -15.5, 3.4), (-11, 168, -13.5, 3.0), (22.5, 150, -4.0, 3.2), (-19.5, 64, -5.5, 2.6), (-7, 243, 17.0, 3.6),
+                         (16, 104, -7.5, 2.4), (-25, 205, 6.0, 2.5)):
+        b.cut_ball(P(x, y, z), r * u, (1.0, 1.0, 0.75), k=0.8 * u)
+        b.paint_ball(P(x, y, z), r * 2.3 * u, CHAR, 0.7)
+        b.paint_ball(P(x, y, z), r * 0.9 * u, SPLIT, 0.4)
+    for i in range(8):
+        t = i / 7.0
+        x, y, z = -19 + 36 * t, 194 + 38 * t, -13.0 - 4.0 * math.sin(t * math.pi)
+        b.cut_ball(P(x, y, z), 1.7 * u, k=0.4 * u)
+        b.paint_ball(P(x, y, z), 2.6 * u, (0.05, 0.02, 0.02), 0.3)
+        b.paint_ball(P(x, y, z), 1.2 * u, SPLIT, 0.3)
+    for i in range(5):
+        t = i / 4.0
+        b.cut_ball(P(23 - 2 * t, 118 + 22 * t, -7.0 + t), 1.5 * u, k=0.4 * u)
+        b.paint_ball(P(23 - 2 * t, 118 + 22 * t, -7.0 + t), 2.4 * u, (0.05, 0.02, 0.02), 0.3)
+    b.paint_ball(P(-22, 135, -2), 16 * u, CHAR, 0.55)
+    b.paint_ball(P(-18, 150, 4), 9 * u, (0.17, 0.11, 0.1), 0.6)
+    b.paint_ball(P(6, 238, 18), 13 * u, CHAR, 0.6)
+    b.paint_ball(P(-33, 225, 2), 8 * u, CHAR, 0.6)
+    for (a, c) in (((-14, 214, -16), (12, 198, -15)), ((-36, 236, -2), (-37, 200, 0)), ((18, 112, -7), (17, 140, -8)), ((-18, 40, -4), (-16, 76, -6))):
+        b.paint_capsule(P(*a), P(*c), 1.1 * u, (0.45, 0.40, 0.38), 0.5)
+    rust, steel = (0.36, 0.23, 0.15), (0.27, 0.23, 0.21)
+    sc = Hard()
+    e = np.array(P(-17.0, 54, -4.5))
+    d = np.array([-0.62, 0.3, -0.72])
+    d = d / np.linalg.norm(d)
+    side = np.cross(d, [0.0, 1.0, 0.0])
+    side = side / np.linalg.norm(side)
+    lift = np.cross(side, d)
+    half = 2.6 * u
+    corners = [side * sx * half + lift * sy * half for (sx, sy) in ((1, 1), (-1, 1), (-1, -1), (1, -1))]
+    start = e - d * 7.0 * u
+    ends = [34.0, 27.0, 30.5, 23.0]
+    for k, c in enumerate(corners):
+        a = start + c
+        if k == 3:
+            kink = a + d * 22.0 * u
+            sc.ibeam(a, kink, 0.9 * u, rust, up=lift)
+            bent = d * 0.82 - lift * 0.58
+            sc.ibeam(kink, kink + bent * 8.0 * u, 0.9 * u, steel, up=lift)
+        else:
+            sc.ibeam(a, a + d * ends[k] * u, 0.9 * u, rust if k != 1 else steel, up=lift)
+    rings = np.arange(0.0, 30.0, 3.4)
+    rng = np.random.default_rng(91)
+    for i, t in enumerate(rings):
+        for k in range(4):
+            if t > min(ends[k], ends[(k + 1) % 4], 22.0 if 3 in (k, (k + 1) % 4) else 99.0) - 0.5:
+                continue
+            if t > 12.0 and rng.random() < 0.18:
+                continue
+            p0 = start + d * t * u + corners[k]
+            p1 = start + d * t * u + corners[(k + 1) % 4]
+            sc.beam(p0, p1, 0.5 * u, 0.5 * u, rust, up=d)
+            if i + 1 < len(rings) and rings[i + 1] < min(ends[k], ends[(k + 1) % 4], 22.0 if 3 in (k, (k + 1) % 4) else 99.0):
+                q = start + d * rings[i + 1] * u + (corners[(k + 1) % 4] if i % 2 == 0 else corners[k])
+                sc.beam(p0 if i % 2 == 0 else p1, q, 0.36 * u, 0.36 * u, steel, up=d)
+            if rng.random() < 0.3:
+                sc.box(p0, (d, side, lift), (0.7 * u, 0.75 * u, 0.75 * u), steel)
+    tip = start + d * 27.0 * u + corners[1]
+    for (dx, dz, drop) in ((0.6, 0.3, 16.0), (-0.4, 0.7, 11.0)):
+        a = tip
+        mid = a + np.array([dx * 3.0, -drop * 0.55, dz * 3.0]) * u
+        c = a + np.array([dx * 4.0, -drop, dz * 4.5]) * u
+        sc.tube(a, mid, 0.22 * u, steel, sides=5)
+        sc.tube(mid, c, 0.22 * u, steel, sides=5)
+    sc.beam(start + d * 18.0 * u + corners[2], start + d * 17.0 * u + corners[2] - lift * 6.5 * u + side * 1.5 * u, 0.4 * u, 0.12 * u, (0.25, 0.2, 0.15), up=side)
+    b.hard("shin_l", sc)
+    alu, burnt, dark = (0.36, 0.38, 0.39), (0.12, 0.11, 0.11), (0.06, 0.06, 0.07)
+    wing = Hard()
+    root = np.array(P(19.0, 126, -6.0))
+    span = np.array([0.94, -0.3, -0.16])
+    span = span / np.linalg.norm(span)
+    chord = np.cross([0.0, 1.0, 0.0], span)
+    chord = chord / np.linalg.norm(chord)
+    thick = np.cross(span, chord)
+    profile = [(0.0, 0.0), (0.06, 0.55), (0.3, 0.7), (0.65, 0.45), (1.0, 0.04), (0.65, -0.22), (0.3, -0.3), (0.06, -0.25)]
+    stations = [-6.0, 0.0, 5.0, 9.5, 13.0]
+    rows = []
+    for j, s_ in enumerate(stations):
+        c_len = (4.6 - 0.06 * (s_ + 6.0)) * u
+        t_len = (0.75 - 0.012 * (s_ + 6.0)) * u
+        row = []
+        for (cx, ty) in profile:
+            jag = 0.0
+            if j == len(stations) - 1:
+                jag = rng.uniform(-2.2, 0.8)
+            row.append(root + span * (s_ + jag) * u + chord * (cx - 0.3) * c_len + thick * ty * t_len)
+        rows.append(row)
+    for j in range(len(rows) - 1):
+        for k in range(len(profile)):
+            a, b_, c, d_ = rows[j][k], rows[j][(k + 1) % len(profile)], rows[j + 1][(k + 1) % len(profile)], rows[j + 1][k]
+            n = np.cross(b_ - a, d_ - a)
+            centre = (rows[j][2] + rows[j][6]) * 0.5
+            if np.dot(n, a - centre) < 0:
+                n = -n
+            wing.quad(a, b_, c, d_, n, alu if j < len(rows) - 2 or k % 3 else burnt)
+    last = rows[-1]
+    for k in range(1, len(profile) - 1):
+        wing.tri(last[0], last[k], last[k + 1], span, dark)
+    for s_ in (10.0, 11.4, 12.6):
+        a = root + span * s_ * u
+        wing.box(a + chord * 0.35 * 4.0 * u, (chord, thick, span), (1.6 * u, 0.32 * u, 0.06 * u), burnt)
+    nac = root + span * 6.2 * u - thick * 0.9 * u - chord * 0.6 * u
+    fwd = -chord
+    wing.tube(nac - fwd * 3.0 * u, nac + fwd * 2.6 * u, 1.25 * u, alu, sides=10, r2=1.15 * u)
+    wing.tube(nac + fwd * 2.6 * u, nac + fwd * 3.3 * u, 1.15 * u, dark, sides=10, r2=0.55 * u)
+    hub = nac + fwd * 3.4 * u
+    _f, bu, bv = wing.frame(fwd)
+    for k, bend in enumerate((0.0, 0.0, 0.9)):
+        a_ = 2.0 * math.pi * k / 3.0 + 0.4
+        out = bu * math.cos(a_) + bv * math.sin(a_)
+        tip_ = hub + out * 2.4 * u + fwd * bend * 1.6 * u
+        wing.beam(hub, tip_, 0.55 * u, 0.14 * u, dark, up=fwd)
+    wing.tube(hub - fwd * 0.2 * u, hub + fwd * 0.5 * u, 0.45 * u, dark, sides=8)
+    b.hard("thigh_r", wing)
     b.cuts.append((lambda Q: Q[:, 1] + 0.0, 0.5 * u))
     b.lumpy(0.045 / u, 1.5 * u, 31)
     b.lumpy(0.17 / u, 0.5 * u, 32)
@@ -407,7 +528,8 @@ def main():
         b = watcher(name, **kw)
         info[name] = b.build(voxel=0.005, triangles=10000, soft=0.035, scale_ao=0.03)
     if not want or "colossus" in want:
-        info["colossus"] = colossus().build(voxel=0.85, triangles=30000, soft=4.5, scale_ao=4.0)
+        soft_fingers = {"finger%d%s" % (f, part): 1.3 for f in range(3) for part in ("", "b")}
+        info["colossus"] = colossus().build(voxel=0.85, triangles=40000, soft=4.5, scale_ao=4.0, soft_bones=soft_fingers)
     if not want or "reacher" in want:
         info["reacher"] = reacher().build(voxel=0.011, triangles=14000, soft=0.06, scale_ao=0.045)
     with open(path, "w") as f:

@@ -359,6 +359,16 @@ def star(size=256):
     return rgba((0.78, 0.77, 0.72), a)
 
 
+def paint_bar(seed, w=512, h=40, color=(0.80, 0.78, 0.72)):
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    n = noise(h, w, 12, seed, stretch=(0.2, 1.0))
+    edge = np.abs(yy - h / 2) / (h / 2) + n * 0.25
+    a = smoothstep(1.0, 0.72, edge)
+    a = a * smoothstep(0.0, 18.0, xx + n * 24.0) * smoothstep(0.0, 18.0, w - xx + n * 24.0)
+    a = a * (smoothstep(-0.6, 0.1, noise(h, w, 30, seed + 1, stretch=(0.1, 1.0))) * 0.45 + 0.55)
+    return rgba(color, a)
+
+
 def tally(seed=5, w=512, h=200):
     rng = np.random.default_rng(seed)
     img = Image.new("L", (w, h), 0)
@@ -431,6 +441,12 @@ def pictures():
     for n in ("38 m", "61 m", "110 m", "240 m"):
         p["mark_" + n.split()[0]] = text_block(["— " + n], "courier_bold", 90, (0.82, 0.80, 0.74), wear=0.3, seed=430 + len(n), pad=6)
 
+    p["paint_bar"] = paint_bar(611)
+    for m in range(2, 17, 2):
+        p["h_%d" % m] = text_block(["%d m" % m], "courier_bold", 110, (0.80, 0.78, 0.72), wear=0.35, seed=600 + m, pad=6)
+    for key, words in (("d_194", "1.94   XI.43"), ("d_260", "2.60   I.44"), ("d_610", "6.10   IV.44")):
+        p[key] = text_block([words], "scrawl", 96, CHALK, wear=0.2, seed=620 + len(words), wobble=1.0, pad=6)
+    p["wall_see_house"] = text_block(["I CAN SEE", "OUR HOUSE", "FROM HERE"], "paint", 80, PAINT_RED, wear=0.25, seed=624, wobble=2.0, spacing=1.5)
     p["wall_noch_da"] = text_block(["ICH BIN NOCH DA"], "paint", 70, (0.045, 0.04, 0.04), wear=0.2, seed=441, wobble=1.5)
     p["wall_hoert_alles"] = text_block(["12 HÖRT ALLES"], "scrawl", 96, (0.75, 0.73, 0.69), wear=0.15, seed=442, wobble=2.0)
     p["wall_nicht_auf"] = text_block(["ES HÖRT", "NICHT AUF"], "paint", 80, PAINT_RED, wear=0.25, seed=443, wobble=2.0, spacing=1.5)

@@ -64,7 +64,8 @@ class Sheet:
             out.append(line)
         return out
 
-    def write(self, text, face="type", size=30, color=INK_TYPE, gap=1.0, indent=0, align="left", wobble=0.0, strength=0.9, spacing=1.32, x=None, width=None):
+    def write(self, text, face="type", size=30, color=INK_TYPE, gap=1.0, indent=0, align="left", wobble=0.0, strength=0.9, spacing=1.32, x=None, width=None,
+              slant=0.0, bold=0, shaky=0.0):
         f = font(face, size)
         width = width or (self.w - self.margin * 2 - indent)
         ascent, descent = f.getmetrics()
@@ -78,7 +79,19 @@ class Sheet:
                     lx = (self.w - f.getlength(line)) / 2
                 elif align == "right":
                     lx = self.w - self.margin - f.getlength(line)
-                ImageDraw.Draw(img).text((lx + self.rng.uniform(-1.5, 1.5) * (wobble > 0), room), line, font=f, fill=255)
+                draw = ImageDraw.Draw(img)
+                if shaky:
+                    cx = lx + self.rng.uniform(-1.5, 1.5)
+                    for ch in line:
+                        draw.text((cx + self.rng.normal(0, shaky * 0.5), room + self.rng.normal(0, shaky)), ch, font=f, fill=255)
+                        cx += f.getlength(ch)
+                else:
+                    draw.text((lx + self.rng.uniform(-1.5, 1.5) * (wobble > 0), room), line, font=f, fill=255)
+                if bold:
+                    img = img.filter(ImageFilter.MaxFilter(bold * 2 + 1))
+                if slant:
+                    base = room + ascent
+                    img = img.transform(img.size, Image.AFFINE, (1.0, slant, -slant * base, 0.0, 1.0, 0.0), resample=Image.BICUBIC)
                 if wobble:
                     img = img.rotate(self.rng.uniform(-wobble, wobble), resample=Image.BICUBIC, center=(lx, room + ascent))
                 part = np.asarray(img, dtype=np.float32) / 255.0 * strength
@@ -93,6 +106,96 @@ class Sheet:
                     self.ink_rgb[ys:ye][take] = color
             self.y += lh
         self.y += int(lh * (gap - 1.0) + lh * 0.45)
+
+    def typed(self, text, face="type", size=30, color=INK_TYPE, gap=1.0, indent=0, strength=0.95, spacing=1.32, x=None, width=None, align="left",
+              blur=0.0, pressure=0.45):
+        f = font(face, size)
+        adv = f.getlength("abcdefghijklmnopqrstuvwxyz") / 26.0 * 1.08
+        width = width or (self.w - self.margin * 2 - indent)
+        ascent, descent = f.getmetrics()
+        lh = int((ascent + descent) * spacing * 0.86)
+        tall = ascent + descent + 8
+        cw = int(adv * 1.6) + 8
+        ribbon = noise(18, self.seed + 70, stretch=(0.25, 1.0)) * 0.5 + 0.5
+
+        class Mono:
+            @staticmethod
+            def getlength(t):
+                return len(t) * adv
+
+        for line in self._wrap(text, Mono, width):
+            if line:
+                lx = x if x is not None else self.margin + indent
+                if align == "center":
+                    lx = (self.w - adv * len(line)) / 2
+                elif align == "right":
+                    lx = self.w - self.margin - adv * len(line)
+                tilt = self.rng.uniform(-1.2, 1.2)
+                for i, ch in enumerate(line):
+                    if ch == " ":
+                        continue
+                    hit = self.rng.uniform(1.0 - pressure, 1.0)
+                    if self.rng.random() < 0.07:
+                        hit *= 0.55
+                    g = Image.new("L", (cw, tall), 0)
+                    gd = ImageDraw.Draw(g)
+                    gd.text((4, 4), ch, font=f, fill=255)
+                    if self.rng.random() < 0.05:
+                        gd.text((4 + self.rng.uniform(1.0, 2.0), 4 + self.rng.uniform(-1.0, 1.0)), ch, font=f, fill=110)
+                    if blur:
+                        g = g.filter(ImageFilter.GaussianBlur(blur))
+                    a = np.asarray(g, dtype=np.float32) / 255.0
+                    yy = np.linspace(-1.0, 1.0, tall)[:, None]
+                    xx = np.linspace(-1.0, 1.0, cw)[None, :]
+                    a = a * np.clip(hit + yy * self.rng.uniform(-0.45, 0.45) + xx * self.rng.uniform(-0.25, 0.25), 0.12, 1.0)
+                    px = int(round(lx + i * adv + (adv - f.getlength(ch)) * 0.5 + self.rng.normal(0.0, 0.6))) - 4
+                    py = int(round(self.y + self.rng.normal(0.0, 0.7) + tilt * i / max(len(line), 1))) - 4
+                    ys, ye = max(py, 0), min(py + tall, self.h)
+                    xs, xe = max(px, 0), min(px + cw, self.w)
+                    if ye <= ys or xe <= xs:
+                        continue
+                    seg = a[ys - py:ye - py, xs - px:xe - px] * strength * (0.72 + 0.28 * ribbon[ys:ye, xs:xe])
+                    old = self.ink[ys:ye, xs:xe]
+                    take = seg > old
+                    self.ink[ys:ye, xs:xe] = np.maximum(old, seg)
+                    self.ink_rgb[ys:ye, xs:xe][take] = color
+            self.y += lh
+        self.y += int(lh * (gap - 1.0) + lh * 0.45)
+
+    def stamp(self, text, cx, cy, size=40, color=(0.50, 0.10, 0.12), angle=-6.0, face="courier_bold", box=True, strength=0.85, seed=0, lines=None):
+        f = font(face, size)
+        rows = lines or [text]
+        asc, desc = f.getmetrics()
+        tw = max(f.getlength(r) for r in rows)
+        pad = int(size * 0.4)
+        bw, bh = int(tw + pad * 2), int((asc + desc) * len(rows) + pad * 2)
+        img = Image.new("L", (bw + 24, bh + 24), 0)
+        d = ImageDraw.Draw(img)
+        for k, r in enumerate(rows):
+            d.text((12 + pad + (tw - f.getlength(r)) / 2, 12 + pad + k * (asc + desc) - desc * 0.4), r, font=f, fill=255)
+        if box:
+            d.rectangle([14, 14, 10 + bw, 10 + bh], outline=255, width=max(3, size // 9))
+        img = img.rotate(angle, resample=Image.BICUBIC, expand=True)
+        a = np.asarray(img, dtype=np.float32) / 255.0
+        h, w = a.shape
+        n = noise(14, self.seed + 80 + seed, h=h, w=w) * 0.6 + noise(60, self.seed + 81 + seed, h=h, w=w) * 0.4
+        a = a * smoothstep(-0.55, 0.15, n) * strength
+        x0, y0 = int(cx - w / 2), int(cy - h / 2)
+        ys, ye = max(y0, 0), min(y0 + h, self.h)
+        xs, xe = max(x0, 0), min(x0 + w, self.w)
+        seg = a[ys - y0:ye - y0, xs - x0:xe - x0]
+        old = self.ink[ys:ye, xs:xe]
+        take = seg > old * 0.8
+        self.ink[ys:ye, xs:xe] = np.maximum(old, seg)
+        self.ink_rgb[ys:ye, xs:xe][take] = color
+
+    def pen_line(self, pts, color, width=3, strength=0.85):
+        img = Image.new("L", (self.w, self.h), 0)
+        ImageDraw.Draw(img).line(pts, fill=255, width=width, joint="curve")
+        a = np.asarray(img.filter(ImageFilter.GaussianBlur(0.7)), dtype=np.float32) / 255.0 * strength
+        take = a > self.ink
+        self.ink = np.maximum(self.ink, a)
+        self.ink_rgb[take] = color
 
     def skip(self, lines=1.0, size=30):
         self.y += int(size * 1.3 * lines)
@@ -227,12 +330,22 @@ def notice():
     s = Sheet(11, color=(0.84, 0.79, 0.63), stain=0.45)
     s.write("Bekanntmachung", "fraktur", 76, align="center", gap=1.0)
     s.rule(strength=0.7, thick=3)
-    s.skip(0.6)
-    s.write("2 March 1945", "fell_italic", 34, align="center")
-    s.write("By order of the site commandant, all residents of Kaltenholz will leave the village by 18:00 today.", "fell", 38)
-    s.write("Livestock stays.\nTake one bag.", "fell", 38)
-    s.write("Do not look toward the site after dark.", "fell", 38)
-    s.write("Whoever is found in the village after the hour named will be", "fell", 38)
+    s.skip(0.5)
+    ink = np.array([0.05, 0.05, 0.07])
+    hand = dict(face="pencil", size=50, color=ink, wobble=0.6, bold=1, spacing=1.1, slant=-0.05)
+    s.write("2 March 1945", **dict(hand, size=44), align="right")
+    s.write("By order of the site commandant, all residents of Kaltenholz will leave the village by 18:00 today.", **hand)
+    s.write("Livestock stays. Take one bag.", **hand)
+    f = font("pencil", 50)
+    line = "Do not look toward the site after dark."
+    y0 = s.y
+    s.write(line, **hand)
+    if f.getlength(line) < W - s.margin * 2:
+        yb = y0 + f.getmetrics()[0] * 0.92
+        x1 = s.margin + f.getlength(line)
+        s.pen_line([(s.margin - 6, yb + 3), ((s.margin + x1) / 2, yb + 7), (x1 + 8, yb + 1)], ink, width=4)
+    s.write("Whoever is found in the village after the hour named will be", **hand)
+    s.stamp("KOMMANDANTUR", 190, 196, size=24, color=(0.30, 0.15, 0.40), angle=7.0, strength=0.7)
     s.folds()
     s.edges(1.2)
     s.hole(W / 2, 34)
@@ -259,17 +372,34 @@ def journal1():
 
 def flightlog():
     s = Sheet(13, color=(0.83, 0.79, 0.66), stain=0.5)
-    s.write("PILOT'S FLIGHT LOG                                  p. 2", "courier_bold", 24, gap=0.6)
-    s.rule(strength=0.6)
-    s.skip(0.8)
-    s.write("...released on the valley at 0412. No structure seen at the given position.", "type", 34)
-    s.write("Nav. insists position correct.", "type", 34)
-    s.write("Second pass at 900 ft below cloud.", "type", 34)
-    s.write("Target is not a structure.", "type", 34)
-    s.write("Target is walking.", "type", 34)
-    s.write("Turning for a third", "type", 34)
-    s.typed_wear(0.3)
-    s.burn([(0, 880), (140, 800), (300, 838), (470, 730), (620, 760), (768, 640)], reach=85, holes=[(610, 250, 34)])
+    printed = np.array([0.16, 0.15, 0.19])
+    s.typed("PILOT'S FLIGHT LOG", "courier_bold", 30, printed, gap=0.5, pressure=0.25)
+    top = s.y - 12
+    s.rule(top, strength=0.55, color=printed)
+    col = s.margin + 112
+    s.y = top + 10
+    s.typed("TIME", "courier_bold", 15, printed, x=s.margin + 4, pressure=0.2)
+    s.y = top + 10
+    s.typed("REMARKS", "courier_bold", 15, printed, x=col, pressure=0.2)
+    s.y = top + 40
+    rows = [("0412", "Released on the valley. No structure seen at the given position.", 0.4, 0.0, 0),
+            ("0415", "Nav. insists position correct.", 0.5, 0.0, 0),
+            ("0419", "Second pass at 900 ft below cloud.", 0.7, 0.4, 0),
+            ("0421", "Target is not a structure.", 1.0, 0.8, 0),
+            ("0422", "Target is walking.", 1.6, 1.4, 1),
+            ("", "Turning for a third", 2.4, 2.0, 0)]
+    for time, text, wob, shake, heavy in rows:
+        y = s.y
+        if time:
+            s.write(time, "pen", 30, INK_PENCIL, x=s.margin + 4, wobble=0.4, slant=0.12)
+        s.y = y
+        s.write(text, "pen", 32 + 4 * heavy, INK_PENCIL, x=col, width=W - col - s.margin + 10, wobble=wob, shaky=shake, slant=0.12, bold=heavy,
+                spacing=1.25)
+        s.rule(s.y - 16, strength=0.22, color=printed, thick=1)
+        s.y += 4
+    s.ink[top:s.y - 16, col - 16:col - 15] = np.maximum(s.ink[top:s.y - 16, col - 16:col - 15], 0.4)
+    s.ink_rgb[top:s.y - 16, col - 16:col - 15] = printed
+    s.burn([(0, 880), (140, 800), (300, 838), (470, 730), (620, 760), (768, 640)], reach=85, holes=[(668, 128, 30)])
     s.edges(1.0)
     return s, "A flight log, the last page, scorched"
 
@@ -339,11 +469,18 @@ def cellwall():
 
 def teamnote():
     s = Sheet(17, color=(0.90, 0.88, 0.78), stain=0.12)
-    s.write("MESSAGE FORM", "courier_bold", 30, align="center", gap=0.4)
-    s.write("FROM  Survey pty, Hochwald      DATE  5 Oct 47      TIME  2140", "courier", 19, gap=0.4)
-    s.rule(strength=0.55)
-    for y in range(s.y + 60, H - 80, 50):
-        s.rule(y, 60, W - 60, 0.14, (0.3, 0.4, 0.55), 1)
+    printed = np.array([0.14, 0.18, 0.16])
+    s.typed("MESSAGE FORM", "courier_bold", 30, printed, align="center", gap=0.4, pressure=0.2)
+    y = s.y + 18
+    for label, value, at, room in (("FROM", "Survey pty, Hochwald", 0, 58), ("DATE", "5 Oct 47", 318, 58), ("TIME", "2140", 506, 58)):
+        s.y = y
+        s.typed(label, "courier_bold", 17, printed, x=s.margin + at, pressure=0.2)
+        s.y = y - 24
+        s.write(value, "pencil", 38, INK_PENCIL, x=s.margin + at + room, wobble=0.5)
+    s.y = y + 46
+    s.rule(strength=0.55, color=printed)
+    for yy in range(s.y + 60, H - 80, 50):
+        s.rule(yy, 60, W - 60, 0.14, (0.3, 0.4, 0.55), 1)
     s.skip(0.9)
     s.write("Set camera 5 on the mast. Good line of sight up the valley.", "pencil", 50, INK_PENCIL, wobble=0.6, spacing=1.16)
     s.write("Wilson says it turned when we keyed the radio. I say coincidence. It is two miles off and it has no ears I can see.", "pencil", 50, INK_PENCIL, wobble=0.6, spacing=1.16)
@@ -357,19 +494,27 @@ def teamnote():
 
 def armyorder():
     s = Sheet(18, color=(0.82, 0.78, 0.64), stain=0.55)
-    s.write("KAMPFGRUPPE HOCHWALD", "courier_bold", 34, gap=0.5)
-    s.write("Gefechtsstand, 19 April 1945", "type", 28)
+    s.typed("KAMPFGRUPPE HOCHWALD", "courier_bold", 34, gap=0.5)
+    s.typed("Gefechtsstand, 19 April 1945", "type", 28)
     s.rule(strength=0.6)
     s.skip(0.8)
-    s.write("All batteries will fire on the figure at first light.", "type", 34)
-    s.write("Aircraft have been requested.", "type", 34)
+    s.typed("All batteries will fire on the figure at first light.", "type", 31)
+    s.typed("Aircraft have been requested.", "type", 31)
     y1 = s.y
-    s.write("It must not reach the valley mouth before", "type", 34)
-    s.write("It does not respond to fire.", "type", 34)
+    s.typed("It must not reach the valley mouth before", "type", 31)
+    f = font("type", 31)
+    y_fire = s.y
+    s.typed("It does not respond to fire.", "type", 31)
     y2 = s.y
-    s.write("It does not respond to its name.", "type", 34)
-    s.write("The men are not to be told what it was.", "type", 34)
+    s.typed("It does not respond to its name.", "type", 31)
+    s.typed("The men are not to be told what it was.", "type", 31)
     s.typed_wear(0.35)
+    red = np.array([0.60, 0.11, 0.09])
+    x1 = min(s.margin + f.getlength("abcdefghijklmnopqrstuvwxyz") / 26.0 * 1.08 * len("It does not respond to fire."), W - s.margin)
+    yb = y_fire + f.getmetrics()[0] + 4
+    s.pen_line([(s.margin - 4, yb + 2), ((s.margin + x1) / 2, yb + 5), (x1 + 6, yb)], red, width=4, strength=0.8)
+    s.pen_line([(s.margin - 4, yb + 11), ((s.margin + x1) / 2, yb + 13), (x1 - 40, yb + 10)], red, width=3, strength=0.7)
+    s.stamp("GEHEIME KOMMANDOSACHE", 450, 868, size=24, color=(0.58, 0.10, 0.10), angle=-6.0, strength=0.75)
     s.burn([(0, 1100), (768, 1100)], reach=10, holes=[(520, y1 + 12, 120), (610, y2 + 14, 96), (60, 960, 150), (700, 80, 90)])
     s.edges(1.4)
     return s, "An army order, half burned"
@@ -378,24 +523,28 @@ def armyorder():
 def memo():
     s = Sheet(19, color=(0.88, 0.86, 0.78), stain=0.2)
     c = INK_CARBON
-    s.write("VORHABEN HOCHWUCHS", "courier_bold", 32, c, gap=0.5)
-    s.write("To: site commandant                     Durchschlag", "courier", 24, c)
+    t = dict(face="courier", size=29, color=c, blur=0.7, pressure=0.45, strength=1.0)
+    s.typed("VORHABEN HOCHWUCHS", **dict(t, face="courier_bold", size=32), gap=0.5)
+    s.typed("To: site commandant", **dict(t, size=24))
     s.rule(strength=0.5, color=c)
     s.skip(0.7)
-    s.write("Subjects 1 to 30 stopped between 2 and 4 m. Quiet. They take no food. They stand for hours.", "courier", 29, c)
-    s.write("They watch 31 at all times. Moved to the far ward, they turn to face the wall he is behind. We do not know why.", "courier", 29, c)
-    s.write("Subject 12 is the exception. Growth in the arms only. Extremely sensitive to light, then, after the procedure, to sound.", "courier", 29, c)
+    s.typed("Subjects 1 to 30 stopped between 2 and 4 m. Quiet. They take no food. They stand for hours.", **t)
+    s.typed("They watch 31 at all times. Moved to the far ward, they turn to face the wall he is behind. We do not know why.", **t)
+    s.typed("Subject 12 is the exception. Growth in the arms only. Extremely sensitive to light, then, after the procedure, to sound.", **t)
     f = font("courier", 29)
     y = s.y
-    s.write("Recommend he is", "courier", 29, c)
-    x = s.margin + int(f.getlength("Recommend he is ")) + 6
+    s.typed("Recommend he is", **t)
+    x = s.margin + int(f.getlength("abcdefghijklmnopqrstuvwxyz") / 26.0 * 1.08 * len("Recommend he is ")) + 6
     s.bar(x, y + 24, W - s.margin - 30, y + 60)
     y = s.y
-    s.write(" ", "courier", 29, c)
+    s.typed(" ", **t)
     s.bar(s.margin - 4, y + 24, s.margin + 430, y + 60)
     s.skip(0.5)
-    s.write("Subject 31 continues.", "courier", 29, c)
+    s.typed("Subject 31 continues.", **t)
     s.ink = np.maximum(s.ink * 0.85, np.roll(s.ink, 2, axis=1) * 0.3)
+    s.stamp("DURCHSCHLAG", 560, 92, size=22, color=(0.55, 0.14, 0.12), angle=4.0, strength=0.6)
+    s.y = 900
+    s.write("he hears the typewriter", "pencil", 44, INK_PENCIL, wobble=2.0, align="right", slant=0.06)
     s.folds(down=False)
     s.edges(0.6)
     return s, "A staff memo, typed, the carbon copy"
@@ -403,8 +552,8 @@ def memo():
 
 def measlog():
     s = Sheet(20, color=(0.86, 0.83, 0.70), stain=0.3)
-    s.write("MESSPROTOKOLL", "courier_bold", 34, gap=0.4)
-    s.write("Proband 31", "type", 34, gap=0.5)
+    s.typed("MESSPROTOKOLL", "courier_bold", 34, gap=0.2, pressure=0.3)
+    s.write("Proband 31", "pen", 40, INK_PEN, wobble=0.6, slant=0.1, gap=0.6)
     top = s.y
     s.rule(strength=0.6)
     rows = [("1.94 m", "Nov 43", ""), ("2.60 m", "Jan 44", ""), ("6.1 m", "Apr 44", "moved to cell 4"), ("38 m", "Aug 44", "moved to the hall"),
@@ -423,8 +572,8 @@ def measlog():
     for x in (s.margin + 170, s.margin + 320):
         s.ink[top:s.y - 14, x:x + 1] = np.maximum(s.ink[top:s.y - 14, x:x + 1], 0.3)
     s.skip(0.6)
-    s.write("Measurement stopped.", "type", 32)
-    s.write("He no longer answers to his name.", "type", 32)
+    s.write("Measurement stopped.", "pen", 34, INK_PEN, wobble=0.8, slant=0.1)
+    s.write("He no longer answers to his name.", "pen", 34, INK_PEN, wobble=1.0, slant=0.1)
     s.skip(0.4)
     s.write("what is he eating", "pencil", 54, INK_PENCIL, wobble=2.0, align="right")
     s.edges(0.7)

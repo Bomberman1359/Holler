@@ -74,6 +74,10 @@ var _battery_mesh: ArrayMesh
 var _scare_left := 0.0
 var _ending_time := 0.0
 var _roof_gone := false
+var chase := {}
+var _held := false
+var _held_at := Vector3.ZERO
+var _grab_wrist := Vector3.INF
 
 
 func _ready() -> void:
@@ -88,7 +92,59 @@ func _ready() -> void:
 	Game.film_taken.connect(_on_film)
 	Game.player_died.connect(_on_death)
 	Game.player_back.connect(_on_back)
+	_set_ways.call_deferred()
 	_update_objective()
+
+
+func _set_ways() -> void:
+	if world.reacher == null:
+		return
+	world.reacher.lost_you.connect(_on_lost)
+	var list: Array = []
+	for place: String in ["church", "sanatorium", "tunnel"]:
+		var s := site(place)
+		if s == null:
+			continue
+		var pts: Array = []
+		while s.has_mark("way_%d" % pts.size()):
+			pts.append(s.mark("way_%d" % pts.size()))
+		if pts.size() < 3:
+			continue
+		var inner := pts.slice(0, pts.size() - 2)
+		var c := Vector3.ZERO
+		for p: Vector3 in inner:
+			c += p
+		c /= float(inner.size())
+		var r := 0.0
+		for p: Vector3 in inner:
+			r = maxf(r, Vector2(p.x - c.x, p.z - c.z).length())
+		list.append({"center": c, "radius": r + 5.0, "points": pts})
+	world.reacher.doors = list
+
+
+func _start_chase(c: Dictionary, again := false) -> void:
+	var reacher: Node3D = world.reacher
+	if reacher == null:
+		return
+	chase = c
+	reacher.start_chase(c.from, c.seconds, c.speed, c.no_hiding)
+	world.sfx.forced_chase = c.seconds
+	if c.run:
+		Game.main.hud.show_run(3.6)
+		var mat: ShaderMaterial = Game.main.film_mat
+		var tw := create_tween()
+		tw.tween_method(func(v: float) -> void: mat.set_shader_parameter("jitter", v), 0.9, 0.0, 1.4)
+	if not again:
+		Game.say(c.say, 5.0)
+	Rig.note("chase", "start" if not again else "again")
+
+
+func _on_lost() -> void:
+	if chase.is_empty():
+		return
+	chase = {}
+	world.sfx.forced_chase = 0.0
+	Rig.note("chase", "lost")
 
 
 func site(place: String) -> Node3D:
@@ -502,14 +558,18 @@ func _after_film(index: int) -> void:
 					world.colossus.place(WALK_TO_BOMBER[1], -1.2)
 				world.colossus.walk_route(WALK_PAST_BOMBER)
 				world.air.density_scale = 0.62
+		1:
+			if world.reacher and site("church"):
+				_start_chase({"from": spot("church", "reacher_home") + Vector3(0, 0.3, 0), "seconds": 17.0, "speed": 4.5, "no_hiding": true,
+						"run": true, "say": "It is in the church. Out, through the tower."})
 		3:
 			if world.reacher and site("sanatorium"):
-				Game.say("Something is coming down the ward. Run, or get in a locker.", 5.0)
-				world.reacher.start_chase(spot("sanatorium", "reacher_ward") + Vector3(0, 0.3, 0))
+				_start_chase({"from": spot("sanatorium", "reacher_ward") + Vector3(0, 0.3, 0), "seconds": 24.0, "speed": 4.9, "no_hiding": false,
+						"run": false, "say": "Something is coming down the ward. Run, or get in a locker."})
 		5:
 			if world.reacher and site("tunnel"):
-				Game.say("It heard the camera. The lockers, or the hall.", 5.0)
-				world.reacher.start_chase(spot("tunnel", "chase_start") + Vector3(0, 0.3, 0))
+				_start_chase({"from": spot("tunnel", "chase_start") + Vector3(0, 0.3, 0), "seconds": 22.0, "speed": 4.8, "no_hiding": false,
+						"run": false, "say": "It heard the camera. Into the hall, or a locker."})
 	if Game.film_total() == Game.FILM_COUNT:
 		var later := create_tween()
 		later.tween_interval(12.0 if index == 5 or index == 3 else 1.0)
@@ -811,7 +871,15 @@ func _on_back() -> void:
 	mat.set_shader_parameter("snow", 0.0)
 	mat.set_shader_parameter("dark", 0.0)
 	mat.set_shader_parameter("jitter", 0.0)
-	if world.reacher and world.reacher.state != 0:
+	if not chase.is_empty() and world.reacher:
+		var c := chase
+		world.reacher.sleep()
+		var later := create_tween()
+		later.tween_interval(1.8)
+		later.tween_callback(func() -> void:
+			if not Game.dead and not Game.ended:
+				_start_chase(c, true))
+	elif world.reacher and world.reacher.state != 0:
 		world.reacher.restart()
 		world.reacher.calm(6.0)
 	Game.say("FILM %d. Again." % Game.film_total(), 3.0)
@@ -899,10 +967,46 @@ func _ending(delta: float) -> void:
 		rt.tween_property(roof, "position", roof.position + Vector3(-70, 190, 50), 7.0).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 		rt.parallel().tween_property(roof, "rotation", Vector3(0.6, 0.9, -0.4), 7.0)
 	if t > 9.0:
-		colossus.reach_point = player.global_position + Vector3(0, 6.0, 0)
-		colossus.reach_blend = smoothstep(9.0, 15.5, t)
-		player.shake = maxf(player.shake, 0.25 + 0.5 * colossus.reach_blend)
-	if t > 15.5:
+		var p: Vector3 = _held_at if _held else player.global_position
+		var toward: Vector3 = colossus.body_point() - p
+		toward.y = 0.0
+		toward = toward.normalized()
+		var close := smoothstep(14.2, 16.0, t)
+		var lift := smoothstep(16.4, 20.0, t)
+		var wrist := p + Vector3(0, 52.0, 0) + toward * 6.0
+		if close > 0.0:
+			if _grab_wrist == Vector3.INF:
+				_grab_wrist = wrist
+			if lift <= 0.0:
+				var fist: Vector3 = colossus.fist_point()
+				_grab_wrist += (p + Vector3(0, 1.2, 0) - fist) * clampf(delta * 2.5, 0.0, 1.0) * close
+			wrist = _grab_wrist
+		if lift > 0.0:
+			var up_to: Vector3 = colossus.head_point() - toward * 30.0 + Vector3(0, -24.0, 0)
+			wrist = wrist.lerp(up_to, lift)
+		colossus.reach_point = wrist
+		colossus.reach_blend = smoothstep(9.0, 14.2, t)
+		colossus.hand_aim = (p + toward * 6.0 - Vector3(0, 20.0, 0)).lerp(colossus.head_point(), lift * 0.7)
+		colossus.grab = close
+		player.shake = maxf(player.shake, 0.25 + 0.5 * colossus.reach_blend + close * 0.6)
+		if close > 0.55 and not _held:
+			_held = true
+			_held_at = player.global_position
+			player.set_physics_process(false)
+			world.sfx.play("death_hit", 2.0, 0.55)
+			world.sfx.play("metal_groan", 0.0, 0.7)
+			world.sfx.play("colossus_voice", 8.0, 1.25)
+		if _held:
+			var fist: Vector3 = colossus.fist_point()
+			var into := clampf((t - 15.2) / 1.6, 0.0, 1.0)
+			player.global_position = _held_at.lerp(fist - Vector3(0, 1.6, 0), into)
+			player.velocity = Vector3.ZERO
+			var d: Vector3 = colossus.head_point() - player.cam.global_position
+			player.rotation.y = lerp_angle(player.rotation.y, atan2(-d.x, -d.z), minf(delta * 3.0, 1.0))
+			var pitch := clampf(atan2(d.y, Vector2(d.x, d.z).length()), -1.3, 1.3)
+			player.cam.rotation.x = lerpf(player.cam.rotation.x, pitch, minf(delta * 3.0, 1.0))
+			player.set("pitch", player.cam.rotation.x)
+	if t > 20.2:
 		ending_step = 4
 		Game.clear_save()
 		Rig.note("ending", "taken")

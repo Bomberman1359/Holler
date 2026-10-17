@@ -15,6 +15,7 @@ uniform vec3 vein_color = vec3(0.34, 0.30, 0.42);
 uniform float vein_stretch = 1.0;
 uniform float scope_glow = 0.0;
 uniform float eye_shine = 0.0;
+uniform float close_detail = 0.0;
 
 varying vec3 wpos;
 varying vec3 wn;
@@ -68,11 +69,22 @@ void fragment() {
 	float blotch = vnoise(p * 6.0) * 0.6 + vnoise(p * 17.0) * 0.4;
 	float net = abs(vnoise(p * vec3(11.0, 5.0 * vein_stretch, 11.0) + 3.7) - 0.5);
 	float vein = smoothstep(0.035, 0.0, net) * smoothstep(0.35, 0.7, vnoise(p * 2.3 + 9.1)) * veins;
-	vec3 albedo = paint.rgb * tint * (0.74 + 0.5 * blotch);
+	float metal = step(0.37, shine) * step(shine, 0.43);
+	vein *= 1.0 - metal;
+	vec3 albedo = paint.rgb * mix(tint, vec3(1.0), metal) * (0.74 + 0.5 * mix(blotch, vnoise(rest * 2.1) * 0.7 + 0.3, metal));
 	albedo = mix(albedo, albedo * vein_color * 1.6, vein);
+	if (close_detail > 0.0) {
+		float near = (1.0 - smoothstep(12.0, 70.0, distance(eye, wpos))) * close_detail * (1.0 - metal);
+		if (near > 0.001) {
+			float pores = vnoise(rest * 1.7) * 0.55 + vnoise(rest * 5.3) * 0.3 + vnoise(rest * 13.0) * 0.15;
+			float crease = smoothstep(0.06, 0.0, abs(vnoise(rest * vec3(0.35, 2.6, 0.35) + 5.1) - 0.5));
+			albedo *= mix(1.0, (0.62 + 0.62 * pores) * (1.0 - 0.45 * crease), near);
+		}
+	}
 	float open = mix(0.22, 1.0, paint.a);
 	vec3 lit = albedo * (night_light(wpos, n, 0.3, 1.0) * open + own_light * (0.5 + 0.5 * open));
-	lit += night_gloss(wpos, n, eye, 0.55 - 0.4 * shine) * (wet + shine) * open;
+	lit += night_gloss(wpos, n, eye, 0.55 - 0.4 * shine) * (wet + shine * (1.0 - metal)) * open;
+	lit += night_gloss(wpos, n, eye, 0.3) * metal * 0.6;
 	vec3 v = normalize(eye - wpos);
 	float edge = 1.0 - max(dot(n, v), 0.0);
 	lit += albedo * (edge * edge * edge) * rim * (sky_light.rgb * 3.0 + moon_light.rgb);

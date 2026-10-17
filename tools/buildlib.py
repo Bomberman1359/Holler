@@ -88,6 +88,7 @@ class Kit:
         self.solid = []
         self.c_pos, self.c_idx = [], []
         self.d_pos, self.d_nrm, self.d_uv, self.d_col, self.d_uv2, self.d_idx = [], [], [], [], [], []
+        self.d_names = []
         self.marks = {}
         self.glows = []
         self.see_from = 340.0
@@ -524,6 +525,49 @@ class Kit:
             self.d_col.append(tuple(tint) + (alpha,))
             self.d_uv2.append((sky, glow))
         self.d_idx.extend((base, base + 2, base + 1, base, base + 3, base + 2))
+        self.d_names.append(name)
+
+    def loose_decals(self, need=0.9):
+        pos = np.asarray(self.pos, dtype=np.float64).reshape(-1, 3)
+        tri = np.asarray(self.idx, dtype=np.int64).reshape(-1, 3)
+        if len(tri) == 0 or not self.d_idx:
+            return []
+        A, B, C = pos[tri[:, 0]], pos[tri[:, 1]], pos[tri[:, 2]]
+        lo = np.minimum(np.minimum(A, B), C)
+        hi = np.maximum(np.maximum(A, B), C)
+        dp = np.asarray(self.d_pos, dtype=np.float64)
+        dn = np.asarray(self.d_nrm, dtype=np.float64)
+        found = []
+        for k in range(len(dp) // 4):
+            q = dp[k * 4:k * 4 + 4]
+            n = dn[k * 4]
+            if n[1] > 0.7:
+                continue
+            near = np.all((hi >= q.min(0) - 0.4) & (lo <= q.max(0) + 0.4), axis=1)
+            a, b, c = A[near], B[near], C[near]
+            e1, e2 = b - a, c - a
+            hit = 0
+            total = 0
+            for u in np.linspace(0.1, 0.9, 5):
+                for v in np.linspace(0.1, 0.9, 5):
+                    p = q[0] + (q[1] - q[0]) * u + (q[3] - q[0]) * v
+                    o = p + n * 0.05
+                    d = -n
+                    h = np.cross(d, e2)
+                    det = (e1 * h).sum(1)
+                    ok = np.abs(det) > 1e-9
+                    inv = np.where(ok, 1.0 / np.where(ok, det, 1.0), 0.0)
+                    sv = o - a
+                    uu = (sv * h).sum(1) * inv
+                    qv = np.cross(sv, e1)
+                    vv = (d * qv).sum(1) * inv
+                    tt = (e2 * qv).sum(1) * inv
+                    good = ok & (uu >= 0) & (vv >= 0) & (uu + vv <= 1) & (tt > 0) & (tt < 0.3)
+                    total += 1
+                    hit += 1 if good.any() else 0
+            if hit < need * total:
+                found.append((self.d_names[k], [round(float(x), 2) for x in q.mean(0)], round(hit / total, 2)))
+        return found
 
 
     def write(self):

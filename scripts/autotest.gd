@@ -112,7 +112,12 @@ func _item(story: Node, label: String, near: Vector3 = Vector3.INF) -> Dictionar
 
 
 func _wanted(test: String) -> bool:
-	return only == "" or only in test
+	if only == "":
+		return true
+	for part in only.split(","):
+		if part != "" and part in test:
+			return true
+	return false
 
 
 func _run() -> void:
@@ -133,6 +138,8 @@ func _run() -> void:
 		await _films()
 	if _wanted("death"):
 		await _death()
+	if _wanted("chase"):
+		await _chases()
 	if _wanted("resume"):
 		await _resume()
 	if _wanted("ending"):
@@ -371,6 +378,110 @@ func _death() -> void:
 		world.reacher.sleep()
 
 
+func run_to(points: Array, max_seconds := 30.0) -> bool:
+	var player: CharacterBody3D = Game.player
+	Input.action_release("crouch")
+	Input.action_press("move_forward")
+	Input.action_press("run")
+	var k := 0
+	var t := 0.0
+	while k < points.size() and t < max_seconds:
+		var p: Vector3 = points[k]
+		var d := Vector2(p.x - player.global_position.x, p.z - player.global_position.z)
+		if d.length() < 0.9:
+			k += 1
+			continue
+		player.rotation.y = atan2(-d.x, -d.y)
+		Game.stamina = 1.0
+		await get_tree().physics_frame
+		t += get_physics_process_delta_time()
+	Input.action_release("move_forward")
+	Input.action_release("run")
+	return k >= points.size()
+
+
+func _take_again(story: Node, index: int) -> bool:
+	Game.films[index] = false
+	var item: Dictionary = story.film_items[index]
+	item.used = false
+	await stand_at(item, 1.3)
+	await frames(4)
+	if story.current != item:
+		print("    cannot take film %d: busy %s, current %s, eye %s, film at %s" % [index + 1, Game.busy, story.current.get("prompt", "none"), Game.player.cam.global_position, item.pos])
+		return false
+	story.interact()
+	await wait_until(func() -> bool: return not story.playing, 3000)
+	return true
+
+
+func _chases() -> void:
+	print("chase")
+	var world: Node3D = Game.world
+	var story: Node = world.story
+	var reacher: Node3D = world.reacher
+	var hud: CanvasLayer = Game.main.hud
+	Game.invulnerable = true
+	var church: Node3D = story.site("church")
+	check("church chase: the film can be taken", await _take_again(story, 1))
+	check("church chase: it comes for you after film 2", reacher.state == 5 and reacher.visible)
+	check("church chase: chase music is forced", world.sfx.forced_chase > 0.0)
+	check("church chase: RUN is on the screen", hud.run_left > 0.0)
+	var locker: Vector3 = church.mark("hide")
+	Game.player.global_position = locker + Vector3(0, 0.1, 0)
+	Game.player.velocity = Vector3.ZERO
+	await frames(20)
+	check("church chase: the locker does not hide you from it", Game.hidden and reacher.state == 5)
+	Game.player.global_position = church.mark("way_2") + Vector3(0, 0.1, 0)
+	await frames(2)
+	var out: Array = [church.mark("way_2"), church.mark("way_3"), church.mark("way_4"), church.mark("way_5"), church.mark("way_5") + Vector3(-26, 0, 12)]
+	var ran := await run_to(out, 25.0)
+	check("church chase: you can run out through the tower (at %s)" % str(Game.player.global_position.round()), ran)
+	var left_church := await wait_until(func() -> bool: return reacher.global_position.x < church.mark("way_4").x + 1.0, 900)
+	if not left_church:
+		print("    reacher state %d, visible %s, chase left %.1f, velocity %s, on wall %s, posed %s, busy %s, steer %s" % [reacher.state, reacher.visible, reacher.chase_left, reacher.velocity, reacher.is_on_wall(), reacher.posed, Game.busy, reacher._steer(Game.player.global_position)])
+	check("church chase: it follows you out of the church door (at %s)" % str(reacher.global_position.round()), left_church)
+	var lost := await wait_until(func() -> bool: return story.chase.is_empty(), 2400)
+	check("church chase: after a while it loses you", lost and reacher.state != 5)
+	story._after_film(1)
+	Game.invulnerable = false
+	Game.kill_player("reacher")
+	await wait_until(func() -> bool: return hud.death.visible and hud.death.modulate.a > 0.9, 900)
+	hud._leave_death(false)
+	Game.invulnerable = true
+	var hid: bool = not reacher.visible
+	var again := await wait_until(func() -> bool: return reacher.visible and reacher.state == 5, 900)
+	check("church chase: after dying it comes again", hid and again and not story.chase.is_empty())
+	reacher.sleep()
+	story.chase = {}
+	world.sfx.forced_chase = 0.0
+
+	var san: Node3D = story.site("sanatorium")
+	check("ward chase: the film can be taken", await _take_again(story, 3))
+	check("ward chase: it comes down the ward", reacher.state == 5 and reacher.visible)
+	var ward_floor: float = san.mark("way_0").y
+	var down: Array = []
+	for n in range(1, 10):
+		down.append(san.mark("way_%d" % n))
+	down.append(san.mark("way_9") + (san.mark("way_9") - san.mark("way_8")).normalized() * 14.0)
+	check("ward chase: you can run downstairs and out", await run_to(down, 40.0))
+	var followed := await wait_until(func() -> bool: return reacher.global_position.y < ward_floor - 2.0 and reacher.global_position.distance_to(san.mark("way_4")) < 30.0, 4000)
+	check("ward chase: it follows you down the stairs (at %s)" % str(reacher.global_position.round()), followed)
+	reacher.sleep()
+	story.chase = {}
+	world.sfx.forced_chase = 0.0
+
+	var tunnel: Node3D = story.site("tunnel")
+	check("tunnel chase: the film can be taken", await _take_again(story, 5))
+	var came := await wait_until(func() -> bool: return reacher.visible and Vector2(reacher.global_position.x - tunnel.mark("way_3").x, reacher.global_position.z - tunnel.mark("way_3").z).length() < 4.0, 900)
+	check("tunnel chase: it comes out of the office door where you can see it", came)
+	var near := await wait_until(func() -> bool: return reacher.global_position.distance_to(Game.player.global_position) < 6.0, 900)
+	check("tunnel chase: it reaches the camera", near)
+	reacher.sleep()
+	story.chase = {}
+	world.sfx.forced_chase = 0.0
+	Game.invulnerable = false
+
+
 func _ending() -> void:
 	var world: Node3D = Game.world
 	var story: Node = world.story
@@ -395,8 +506,19 @@ func _ending() -> void:
 	check("you can still move during the end", not Game.busy)
 	Rig.shoot("ending")
 	var hud: CanvasLayer = Game.main.hud
+	var side_cam: Camera3D = null
+	if String(Rig.opt("view", "")) == "side":
+		side_cam = Camera3D.new()
+		side_cam.far = 3200.0
+		world.add_child(side_cam)
 	var came := await wait_until(func() -> bool:
 		var c: Node3D = world.colossus
+		if side_cam and c and c.visible:
+			var p: Vector3 = Game.player.global_position
+			var across: Vector3 = (c.body_point() - p).cross(Vector3.UP).normalized()
+			side_cam.global_position = p + across * 70.0 + Vector3(0, 30.0, 0) - (c.body_point() - p).normalized() * 30.0
+			side_cam.look_at(p + Vector3(0, 12.0, 0), Vector3.UP)
+			side_cam.make_current()
 		if c and c.visible and story.ending_step >= 1 and story.ending_step < 4:
 			var d: Vector3 = c.head_point() - Game.player.cam.global_position
 			Game.player.rotation.y = atan2(-d.x, -d.z)

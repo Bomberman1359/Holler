@@ -5,6 +5,7 @@ signal click
 signal screech
 signal alerted
 signal sniffed
+signal lost_you
 
 const Terrain := preload("res://scripts/terrain.gd")
 const Creature := preload("res://scripts/creature.gd")
@@ -52,6 +53,10 @@ var sniff_wait := 9.0
 var lifted := ""
 var _time := 0.0
 var _head_turn := Vector3.ZERO
+var doors: Array = []
+var relentless := false
+var chase_speed := CHASE_SPEED
+var chase_call := 3.0
 
 
 func _ready() -> void:
@@ -142,12 +147,17 @@ func restart() -> void:
 
 func sleep() -> void:
 	visible = false
+	relentless = false
 	_set_state(State.DORMANT)
 
 
-func start_chase(from: Vector3, seconds := 28.0) -> void:
+func start_chase(from: Vector3, seconds := 28.0, speed := CHASE_SPEED, no_hiding := false) -> void:
 	_stand_at(from)
 	chase_left = seconds
+	chase_speed = speed
+	relentless = no_hiding
+	chase_call = randf_range(2.2, 3.2)
+	deaf_time = 0.0
 	_set_state(State.CHASE)
 	_open_jaw(0.9)
 	screech.emit()
@@ -221,6 +231,8 @@ func _physics_process(delta: float) -> void:
 	var speed := 0.0
 	match state:
 		State.PATROL:
+			if patrol_points.is_empty():
+				set_home(global_position, 18.0)
 			target = patrol_points[patrol_index]
 			speed = PATROL_SPEED
 			if sniff_left > 0.0:
@@ -274,21 +286,32 @@ func _physics_process(delta: float) -> void:
 				deaf_time = GIVE_UP
 				_set_state(State.LISTEN)
 		State.CHASE:
-			speed = CHASE_SPEED if state_time > 0.6 else 0.0
+			speed = chase_speed if state_time > 0.6 else 0.0
 			target = player.global_position
 			chase_left -= delta
-			if Game.hidden:
+			if Game.hidden and not relentless:
 				chase_left = minf(chase_left, 2.5)
-			if chase_left <= 0.0 or dist > 55.0:
+			chase_call -= delta
+			if chase_call <= 0.0:
+				chase_call = randf_range(2.4, 4.4)
+				if randf() < 0.5:
+					_open_jaw(1.0)
+					screech.emit()
+				else:
+					click.emit()
+			if chase_left <= 0.0 or dist > (70.0 if relentless else 55.0):
 				deaf_time = 9.0
 				heard_for = 0.0
 				target = global_position
+				relentless = false
 				_set_state(State.LISTEN)
+				lost_you.emit()
 				Game.say("It lost you. Stand still. It is blind.", 5.0)
 	if state_time > 1.3 and jaw_want > 0.5 and state != State.DORMANT:
 		jaw_want = 0.25 if is_hunting() else 0.0
 
-	var flat := Vector3(target.x - global_position.x, 0, target.z - global_position.z)
+	var goal := _steer(target) if speed > 0.0 else target
+	var flat := Vector3(goal.x - global_position.x, 0, goal.z - global_position.z)
 	if speed > 0.0 and flat.length() > 0.3:
 		var dir := flat.normalized()
 		velocity.x = move_toward(velocity.x, dir.x * speed, 20.0 * delta)
@@ -302,11 +325,13 @@ func _physics_process(delta: float) -> void:
 	else:
 		velocity.y -= GRAVITY * delta
 	move_and_slide()
+	if speed > 0.0 and is_on_wall() and flat.length() > 0.5:
+		_climb(Vector3(flat.x, 0.0, flat.z).normalized())
 	var ground := Terrain.height(global_position.x, global_position.z)
 	if global_position.y < ground - 0.5:
 		global_position.y = ground + 0.2
 
-	if dist < KILL_RANGE and not Game.hidden and _nothing_between(player) and (state == State.CHARGE or state == State.CHASE or (state == State.SEARCH and Game.noise > 0.05 and heard_for > REACT)):
+	if dist < KILL_RANGE and (not Game.hidden or relentless) and _nothing_between(player) and (state == State.CHARGE or state == State.CHASE or (state == State.SEARCH and Game.noise > 0.05 and heard_for > REACT)):
 		Game.kill_player("reacher")
 
 	if state == State.LISTEN or state == State.SEARCH or state == State.PATROL:
@@ -314,6 +339,78 @@ func _physics_process(delta: float) -> void:
 		if click_wait <= 0.0:
 			click_wait = randf_range(0.8, 2.6) if state != State.PATROL else randf_range(3.0, 6.0)
 			click.emit()
+
+
+func _steer(to: Vector3) -> Vector3:
+	if doors.is_empty():
+		return to
+	var here := global_position
+	for way: Dictionary in doors:
+		var c: Vector3 = way.center
+		var r: float = way.radius
+		if Vector2(here.x - c.x, here.z - c.z).length() > r and Vector2(to.x - c.x, to.z - c.z).length() > r:
+			continue
+		if _clear(here, to):
+			return to
+		var pts: Array = way.points
+		var me := _nearest(pts, here)
+		var it := _nearest(pts, to)
+		var step := 1 if it >= me else -1
+		var k := it
+		while true:
+			var p: Vector3 = pts[k]
+			if _clear(here, p):
+				if k == me and k != it and Vector2(here.x - p.x, here.z - p.z).length() < 1.0:
+					return pts[k + step]
+				return p
+			if k == me:
+				break
+			k -= step
+		return pts[me]
+	return to
+
+
+func _climb(ahead: Vector3) -> void:
+	var space := get_world_3d().direct_space_state
+	var skip: Array[RID] = [get_rid()]
+	var chest := global_position + Vector3(0, 1.0, 0)
+	var low := false
+	for h: float in [0.2, 0.45, 0.7]:
+		var foot := global_position + Vector3(0, h, 0)
+		if not space.intersect_ray(PhysicsRayQueryParameters3D.create(foot, foot + ahead * 0.9, 1, skip)).is_empty():
+			low = true
+	var high := space.intersect_ray(PhysicsRayQueryParameters3D.create(chest, chest + ahead * 0.9, 1, skip))
+	if low and high.is_empty():
+		global_position += Vector3(0, 0.5, 0) + ahead * 0.2
+		velocity.y = 0.0
+
+
+func _nearest(pts: Array, p: Vector3) -> int:
+	var best := 0
+	var best_d := INF
+	for k in pts.size():
+		var q: Vector3 = pts[k]
+		var d := Vector2(q.x - p.x, q.z - p.z).length() + absf(q.y - p.y) * 3.0
+		if d < best_d:
+			best_d = d
+			best = k
+	return best
+
+
+func _clear(a: Vector3, b: Vector3) -> bool:
+	var skip: Array[RID] = [get_rid()]
+	if Game.player:
+		skip.append(Game.player.get_rid())
+	var space := get_world_3d().direct_space_state
+	var q := PhysicsRayQueryParameters3D.create(a + Vector3(0, 1.0, 0), b + Vector3(0, 1.0, 0), 1, skip)
+	if not space.intersect_ray(q).is_empty():
+		return false
+	for f: float in [0.3, 0.55, 0.8]:
+		var p := a.lerp(b, f)
+		var down := PhysicsRayQueryParameters3D.create(p + Vector3(0, 0.6, 0), p + Vector3(0, -1.4, 0), 1, skip)
+		if space.intersect_ray(down).is_empty():
+			return false
+	return true
 
 
 func _nothing_between(player: CharacterBody3D) -> bool:

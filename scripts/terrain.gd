@@ -190,7 +190,7 @@ func _material(far: bool) -> ShaderMaterial:
 	m.set_shader_parameter("cell", CELL)
 	m.render_priority = -2
 	if far:
-		m.set_shader_parameter("far_sink", 14.0)
+		m.set_shader_parameter("far_sink", 26.0)
 		m.set_shader_parameter("canopy", 17.0)
 		m.render_priority = 0
 	return m

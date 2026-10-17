@@ -15,6 +15,7 @@ var caption: Label
 var keys: Label
 var fps: Label
 var bars: Control
+var compass: Control
 var msg_left := 0.0
 var keys_left := 14.0
 var paper: Control
@@ -27,6 +28,9 @@ var death_line: Label
 var end_screen: Control
 var _breath_shown := 0.0
 var _paper_tween: Tween
+var run_text: Label
+var run_ghost: Label
+var run_left := 0.0
 
 
 func _ready() -> void:
@@ -50,6 +54,20 @@ func _ready() -> void:
 	bars.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	bars.draw.connect(_draw_bars)
 	add_child(bars)
+	compass = Control.new()
+	compass.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	compass.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	compass.draw.connect(_draw_compass)
+	add_child(compass)
+	run_ghost = UI.label(self, "RUN", "scrawl", 200, Vector2(0, 250), W, HORIZONTAL_ALIGNMENT_CENTER, Color(0.85, 0.8, 0.76, 0.22))
+	run_ghost.size.y = 330
+	run_ghost.visible = false
+	run_text = UI.label(self, "RUN", "scrawl", 200, Vector2(0, 250), W, HORIZONTAL_ALIGNMENT_CENTER, Color(0.72, 0.05, 0.04))
+	run_text.size.y = 330
+	run_text.pivot_offset = Vector2(W * 0.5, 165.0)
+	run_text.add_theme_constant_override("shadow_offset_x", 5)
+	run_text.add_theme_constant_override("shadow_offset_y", 5)
+	run_text.visible = false
 	_build_paper()
 	_build_death()
 	Game.message.connect(_on_message)
@@ -86,6 +104,48 @@ func _draw_bars() -> void:
 		var tired := Game.stamina < 0.2
 		bars.draw_rect(Rect2(bx, by, w * Game.stamina, 5.0), Color(1, 1, 1, (0.5 if tired else 0.85) * a))
 		bars.draw_string(font, Vector2(bx - 74.0, by + 9.0), "BREATH", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(1, 1, 1, 0.6 * a))
+
+
+func _draw_compass() -> void:
+	if not counter.visible or Game.player == null or Game.player.cam == null or not Game.player.cam.is_inside_tree():
+		return
+	var fwd: Vector3 = -Game.player.cam.global_basis.z
+	var heading := rad_to_deg(atan2(fwd.x, -fwd.z))
+	var cx := W * 0.5
+	var y := 46.0
+	var half := 230.0
+	var per := 2.9
+	var font := UI.font("typed")
+	compass.draw_line(Vector2(cx - half, y), Vector2(cx + half, y), Color(1, 1, 1, 0.16), 1.0)
+	var a := int(floor((heading - half / per) / 15.0)) * 15
+	while a <= heading + half / per:
+		var x := cx + (a - heading) * per
+		var fade := clampf(1.0 - pow(absf(x - cx) / half, 3.0), 0.0, 1.0)
+		var deg := posmod(a, 360)
+		if deg % 90 == 0:
+			compass.draw_line(Vector2(x, y - 7.0), Vector2(x, y + 7.0), Color(1, 1, 1, 0.75 * fade), 1.5)
+			compass.draw_string(font, Vector2(x - 20.0, y - 12.0), ["N", "E", "S", "W"][deg / 90], HORIZONTAL_ALIGNMENT_CENTER, 40.0, 21, Color(1, 1, 1, 0.92 * fade))
+		elif deg % 45 == 0:
+			compass.draw_line(Vector2(x, y - 5.0), Vector2(x, y + 5.0), Color(1, 1, 1, 0.5 * fade), 1.0)
+			compass.draw_string(font, Vector2(x - 20.0, y - 11.0), ["NE", "SE", "SW", "NW"][(deg - 45) / 90], HORIZONTAL_ALIGNMENT_CENTER, 40.0, 14, Color(1, 1, 1, 0.55 * fade))
+		else:
+			compass.draw_line(Vector2(x, y - 3.0), Vector2(x, y + 3.0), Color(1, 1, 1, 0.32 * fade), 1.0)
+		a += 15
+	var story: Node = Game.world.get("story") if Game.world else null
+	if story == null or Game.ended:
+		return
+	var to: Vector3 = story.stop_point(story.next_stop()) - Game.player.global_position
+	if Vector2(to.x, to.z).length() < 60.0:
+		return
+	var rel := wrapf(rad_to_deg(atan2(to.x, -to.z)) - heading, -180.0, 180.0)
+	var mark := Color(1.0, 0.86, 0.6, 0.9)
+	if absf(rel) * per <= half:
+		var x := cx + rel * per
+		compass.draw_colored_polygon(PackedVector2Array([Vector2(x, y + 9.0), Vector2(x - 6.0, y + 19.0), Vector2(x + 6.0, y + 19.0)]), mark)
+	else:
+		var side := signf(rel)
+		var x := cx + side * (half + 14.0)
+		compass.draw_colored_polygon(PackedVector2Array([Vector2(x + side * 7.0, y), Vector2(x - side * 5.0, y - 7.0), Vector2(x - side * 5.0, y + 7.0)]), mark)
 
 
 func _build_paper() -> void:
@@ -198,6 +258,10 @@ func show_end() -> void:
 	create_tween().tween_property(end_screen, "modulate:a", 1.0, 3.0)
 
 
+func show_run(seconds := 3.5) -> void:
+	run_left = seconds
+
+
 func show_caption(text: String) -> void:
 	caption.text = text
 
@@ -243,6 +307,7 @@ func _process(delta: float) -> void:
 	prompt.text = story.prompt() if story and not Game.dead else ""
 	_breath_shown = move_toward(_breath_shown, 1.0 if (Game.stamina < 0.995 and plain) else 0.0, delta * (4.0 if Game.stamina < 0.995 else 0.8))
 	bars.queue_redraw()
+	compass.queue_redraw()
 	if keys_left > 0.0:
 		keys_left -= delta
 		keys.modulate.a = clampf(keys_left / 2.0, 0.0, 1.0) if plain else 0.0
@@ -251,6 +316,20 @@ func _process(delta: float) -> void:
 		msg_left -= delta
 		if msg_left < 1.0:
 			msg.modulate.a = maxf(msg_left, 0.0)
+	if run_left > 0.0:
+		run_left -= delta
+		var live := run_left > 0.0 and not Game.dead
+		var flick := randf() > (0.18 if run_left > 2.6 else 0.06)
+		run_text.visible = live and flick
+		run_text.position = Vector2(randf_range(-10.0, 10.0), 250.0 + randf_range(-7.0, 7.0))
+		run_text.rotation = randf_range(-0.035, 0.035)
+		run_text.scale = Vector2.ONE * (1.0 + maxf(run_left - 2.9, 0.0) * 0.5)
+		run_text.modulate.a = clampf(run_left / 0.9, 0.0, 1.0)
+		run_ghost.visible = live and randf() < 0.45
+		run_ghost.position = Vector2(randf_range(-46.0, 46.0), 250.0 + randf_range(-20.0, 20.0))
+	elif run_text.visible or run_ghost.visible:
+		run_text.visible = false
+		run_ghost.visible = false
 	if death.visible:
 		death_title.position = Vector2(randf_range(-1.2, 1.2), 300.0 + randf_range(-1.0, 1.0))
 		death_title.modulate.a = 0.86 + 0.14 * randf()

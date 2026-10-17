@@ -194,6 +194,48 @@ func _build_sites() -> void:
 		player.position = sites["spawn"].mark("start")
 		player.rotation.y = sites["spawn"].mark_yaw("start")
 		Game.save_here()
+	_build_stakes()
+
+
+func _build_stakes() -> void:
+	var path := Site.DIR + "prop_stake.hmesh"
+	if not FileAccess.file_exists(path):
+		return
+	var spots: Array[Transform3D] = []
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 47
+	var total := Terrain.track_length()
+	var along := 26.0
+	var side := 1.0
+	while along < total - 20.0:
+		var p := Terrain.track_point(along)
+		var q := Terrain.track_point(along + 3.0)
+		var dir := Vector2(q.x - p.x, q.z - p.z).normalized()
+		var off := Vector2(-dir.y, dir.x) * side * (Sites.TRACK_HALF_WIDTH + rng.randf_range(0.9, 1.6))
+		var at := Vector3(p.x + off.x, 0.0, p.z + off.y)
+		at.y = Terrain.height(at.x, at.z)
+		var clear := true
+		for place: String in sites:
+			var c: Vector3 = (sites[place] as Node3D).global_position
+			if Vector2(c.x - at.x, c.z - at.z).length() < 34.0:
+				clear = false
+		if clear:
+			var b := Basis(Vector3.UP, rng.randf() * TAU) * Basis(Vector3.RIGHT, rng.randf_range(-0.09, 0.09)) * Basis(Vector3.FORWARD, rng.randf_range(-0.09, 0.09))
+			spots.append(Transform3D(b, at))
+		along += rng.randf_range(20.0, 27.0)
+		side = -side
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = MeshLib.load_mesh(path).mesh
+	mm.instance_count = spots.size()
+	for i in spots.size():
+		mm.set_instance_transform(i, spots[i])
+	var mmi := MultiMeshInstance3D.new()
+	mmi.name = "Stakes"
+	mmi.multimesh = mm
+	mmi.material_override = Site.material()
+	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(mmi)
 
 
 func add_shot(shot_name: String, pos: Vector3, look_at_point: Vector3, setup := Callable()) -> void:

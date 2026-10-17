@@ -64,6 +64,11 @@ void vertex() {
 		float c = cos(yaw);
 		float sn = sin(yaw);
 		vec3 v = VERTEX * s;
+		if (channel == 2) {
+			v.x *= 0.78 + 0.5 * fract(h1 * 7.13);
+			v.z *= 0.78 + 0.5 * fract(h2 * 3.71);
+			v.y *= 0.8 + 0.45 * fract(h3 * 5.37);
+		}
 		float bend = sway * v.y * (sin(TIME * 1.3 + h1 * 30.0) * 0.06 + sin(TIME * 2.7 + h2 * 20.0) * 0.025);
 		v.x += bend;
 		v.z += bend * 0.6;
@@ -87,7 +92,8 @@ void fragment() {
 		vec3 p = wpos * 0.9;
 		vec3 rock = texture(ground_albedo, vec3(p.zy, 2.0)).rgb * w.x + texture(ground_albedo, vec3(p.xz, 2.0)).rgb * w.y + texture(ground_albedo, vec3(p.xy, 2.0)).rgb * w.z;
 		vec3 moss = texture(ground_albedo, vec3(p.xz * 1.3, 0.0)).rgb;
-		albedo = mix(rock * 0.62, moss * 0.8, smoothstep(0.55, 0.9, wn.y) * 0.6) * (tint / 0.22);
+		float macro = texture(ground_albedo, vec3(wpos.xz * 0.21 + wpos.y * 0.13, 2.0)).r;
+		albedo = mix(rock * 0.62, moss * 0.8, smoothstep(0.55, 0.9, wn.y) * 0.6) * (tint / 0.22) * (0.7 + 0.75 * macro);
 	}
 	vec3 lit = albedo * night_light(wpos, n, 0.6, 1.0);
 	ALBEDO = mix(lit, fog.rgb, fog.a);

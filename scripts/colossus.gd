@@ -38,6 +38,8 @@ var crouch := 0.0
 var look_at_point := Vector3.INF
 var reach_point := Vector3.INF
 var reach_blend := 0.0
+var hand_aim := Vector3.INF
+var grab := 0.0
 var _time := 0.0
 var _skip := 0
 var _last_step_left := false
@@ -55,6 +57,7 @@ func _ready() -> void:
 	body.set_param("wet", 0.25)
 	body.set_param("rim", 0.5)
 	body.set_param("tint", Vector3(0.5, 0.5, 0.56))
+	body.set_param("close_detail", 1.0)
 	body.mesh.custom_aabb = AABB(Vector3(-260, -80, -260), Vector3(520, 520, 520))
 	visible = false
 
@@ -65,6 +68,13 @@ func is_stepping() -> bool:
 
 func body_point() -> Vector3:
 	return pelvis
+
+
+func fist_point() -> Vector3:
+	if not body.has("finger1b"):
+		return body.where("hand_l")
+	var joints: Vector3 = (body.where("finger0b") + body.where("finger1b") + body.where("finger2b")) / 3.0
+	return body.where("finger1").lerp(joints, 0.6)
 
 
 func head_point() -> Vector3:
@@ -191,7 +201,7 @@ func _process(delta: float) -> void:
 	if swing_foot >= 0:
 		want += _forward(heading) * 9.0 * sin(clampf(swing_t, 0.0, 1.0) * PI)
 	pelvis = pelvis.lerp(want, minf(delta * 0.55, 1.0)) if pelvis != Vector3.ZERO else want
-	var busy := walking or bend > 0.001 or mouth > 0.001 or reach_blend > 0.001 or look_at_point != Vector3.INF
+	var busy := walking or bend > 0.001 or mouth > 0.001 or reach_blend > 0.001 or grab > 0.001 or look_at_point != Vector3.INF
 	_skip += 1
 	if busy or _skip % 4 == 0:
 		_pose(delta)
@@ -236,11 +246,19 @@ func _pose(_delta: float) -> void:
 	body.turn("fore3", -0.25 + sin(_time * 0.53) * 0.2, 0.0, 0.0)
 	if reach_blend > 0.001 and reach_point != Vector3.INF:
 		var inv: Transform3D = body.global_transform.affine_inverse()
-		var shoulder: Vector3 = body.head_of("arm_l")
 		var hang: Vector3 = body.head_of("hand_l")
 		var goal: Vector3 = hang.lerp(inv * reach_point, reach_blend)
 		body.reach("arm_l", "fore_l", "hand_l", goal, Vector3(-1.0, 0.2, 0.8))
-		var _unused := shoulder
+		if hand_aim != Vector3.INF and body.has("finger1"):
+			var wrist: Vector3 = body.head_of("hand_l")
+			var now_dir: Vector3 = (body.head_of("finger1") - wrist).normalized()
+			var want: Vector3 = (inv * hand_aim - wrist).normalized()
+			body.aim("hand_l", "finger1", now_dir.slerp(want, reach_blend))
+	if body.has("finger1"):
+		var curl := lerpf(0.0, 1.55, grab) * minf(reach_blend * 3.0, 1.0)
+		for f in 3:
+			body.turn("finger%d" % f, curl * 0.8, 0.0, (f - 1) * 0.16 * (1.0 - grab) * minf(reach_blend * 3.0, 1.0))
+			body.turn("finger%db" % f, curl * 1.1, 0.0, 0.0)
 	var inv2: Transform3D = body.global_transform.affine_inverse()
 	for i in 2:
 		var side := "l" if i == 0 else "r"

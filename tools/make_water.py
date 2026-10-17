@@ -40,7 +40,7 @@ def main():
         n = 20
         for k in range(n):
             a = k / n * 2 * math.pi
-            rx, rz = math.cos(a) * S["FOOT_WIDTH"] * 0.62, math.sin(a) * S["FOOT_LENGTH"] * 0.62
+            rx, rz = math.cos(a) * S["FOOT_WIDTH"] * 0.4, math.sin(a) * S["FOOT_LENGTH"] * 0.4
             x = center[0] + rx * c + rz * s
             z = center[1] - rx * s + rz * c
             ring.append(b.vertex((x, level, z), up, (0.5 + math.cos(a) * 0.5, 0.5 + math.sin(a) * 0.5), (1.0, 0.0)))

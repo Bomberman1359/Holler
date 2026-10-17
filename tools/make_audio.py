@@ -217,16 +217,17 @@ def heartbeat():
     seconds = 0.9
     n = int(seconds * SR)
     x = np.zeros(n)
-    for at, gain, length, decay in ((0.0, 1.0, 0.16, 26.0), (0.29, 0.62, 0.13, 32.0)):
+    for at, gain, length, decay in ((0.0, 1.0, 0.18, 24.0), (0.27, 0.66, 0.14, 30.0)):
         d = int(length * SR)
         k = np.arange(d) / SR
-        env = np.minimum(k / 0.012, 1.0) * np.exp(-k * decay)
-        src = lowpass(noise(d), 400) * env
-        beat = peak(src, 78, 2.0) + 0.9 * peak(src, 155, 2.5) + 0.35 * peak(src, 290, 3.0)
+        env = np.minimum(k / 0.008, 1.0) * np.exp(-k * decay)
+        src = lowpass(noise(d), 1000) * env
+        beat = peak(src, 70, 2.0) + 0.9 * peak(src, 140, 2.5) + 0.55 * peak(src, 260, 3.0) + 0.3 * peak(src, 470, 3.0)
+        slap = bandpass(noise(d), 600, 2200) * np.exp(-k * 150.0)
         s0 = int(at * SR)
-        x[s0:s0 + d] += norm(beat) * gain
-    x = np.tanh(x * 3.0)
-    x = lowpass(x, 650)
+        x[s0:s0 + d] += (norm(beat) + norm(slap) * 0.1) * gain
+    x = np.tanh(x * 3.6)
+    x = lowpass(x, 1600)
     save("heartbeat", loopable(x, 0.05), 0.8, ogg=True)
 
 
@@ -722,7 +723,7 @@ def chase():
         at = i * beat / 2
         g = pattern[i % 8]
         if g > 0.0:
-            place(mix, thud(0.5, 62.0 if g > 0.7 else 78.0, 1.0, 0.35, 9.0, 2.8), at, 0.55 * g, 0.0)
+            place(mix, thud(0.5, 62.0 if g > 0.7 else 78.0, 1.0, 0.5, 9.0, 2.8), at, 0.42 * g, 0.0)
     for i in range(int((beats + 4) * 2)):
         at = i * beat / 2
         bar = (i // 8) % 4
@@ -741,6 +742,26 @@ def chase():
             stab += signal.sawtooth(2 * np.pi * np.cumsum(f * glide * (1.0 + 0.01 * np.sin(2 * np.pi * 7.0 * k))) / SR)
         stab = bandpass(stab, 1000, 7000) * np.minimum(k / 0.005, 1.0) * np.exp(-k * 3.5)
         place(mix, stab, at, 0.09, 0.0)
+    sixteenth = beat / 4.0
+    for i in range(int((beats + 4) * 4)):
+        at = i * sixteenth
+        bar = (i // 16) % 4
+        root = [hz("D", 2), hz("D", 2), hz("Eb", 2), hz("D", 2)][bar]
+        note = root * (1.5 if i % 8 == 6 else (2.0 if i % 8 == 3 else 1.0))
+        d = int(sixteenth * 0.85 * SR)
+        k = np.arange(d) / SR
+        sp = (saw(note, d) + saw(note * 1.004, d)) * np.minimum(k / 0.004, 1.0) * np.exp(-k * 15.0)
+        place(mix, bandpass(sp, 260, 3600), at, 0.075 if i % 4 else 0.11, 0.25 if i % 2 else -0.25)
+    for i in range(beats + 4):
+        if i % 2 == 1:
+            d = int(0.26 * SR)
+            k = np.arange(d) / SR
+            snare = bandpass(noise(d), 900, 5500) * np.exp(-k * 20.0) + 0.6 * peak(noise(d) * np.exp(-k * 28.0), 190.0, 4.0)
+            place(mix, snare, i * beat, 0.2, 0.0)
+    for i in range(int((beats + 4) * 2)):
+        d = int(0.045 * SR)
+        k = np.arange(d) / SR
+        place(mix, highpass(noise(d), 6000) * np.exp(-k * 110.0), i * beat / 2, 0.05 if i % 2 else 0.075, 0.3)
     rise = np.zeros(n)
     for f in (293.7, 311.1, 440.0, 466.2):
         rise += signal.sawtooth(2 * np.pi * np.cumsum(f * (1.0 + 0.003 * np.sin(2 * np.pi * 6.0 * tt))) / SR)

@@ -246,6 +246,9 @@ func _creature_shots(root: Node, terrain: GDScript) -> void:
 		var chest: Vector3 = c.where("chest") + Vector3(0, tall * 0.04, 0)
 		_add("at_%02d_zoom_chest" % (n + 3), root, chest + Vector3(0.5, -0.1, -3.2) * far, chest)
 		_add("at_%02d_from_below" % (n + 4), root, at + Vector3(40, 1.7, -70), head)
+		_add("at_%02d_zoom_shin" % (n + 5), root, at + Vector3(-62, 40, -78), at + Vector3(-24, 56, -10))
+		_add("at_%02d_zoom_thigh" % (n + 6), root, at + Vector3(74, 112, -64), at + Vector3(24, 126, -8))
+		_add("at_%02d_zoom_belly" % (n + 7), root, at + Vector3(-20, 196, -82), at + Vector3(0, 212, -12))
 	if c.has("hand_l"):
 		var hand: Vector3 = c.where("hand_l")
 		_add("at_%02d_hand" % (n + 2), root, hand + Vector3(-0.45, 0.1, -0.5) * size, hand + Vector3(0, -0.1, 0) * size)

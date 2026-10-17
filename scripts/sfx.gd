@@ -436,10 +436,10 @@ func _process(delta: float) -> void:
 		if live and not Game.busy:
 			now = 1.0
 	danger = move_toward(danger, now, delta * (1.6 if now > danger else 0.22))
-	tension.volume_db = move_toward(tension.volume_db, lerpf(-24.0, -5.0, clampf((danger - 0.2) / 0.6, 0.0, 1.0)) if danger > 0.2 else -60.0, delta * 24.0)
+	tension.volume_db = move_toward(tension.volume_db, lerpf(-20.0, -4.0, clampf((danger - 0.15) / 0.6, 0.0, 1.0)) if danger > 0.15 else -60.0, delta * 24.0)
 	chase.volume_db = move_toward(chase.volume_db, lerpf(-14.0, -2.0, (danger - 0.85) / 0.15) if danger > 0.85 else -60.0, delta * (60.0 if danger > 0.85 else 10.0))
-	heart.volume_db = move_toward(heart.volume_db, lerpf(-20.0, -4.0, clampf((danger - 0.35) / 0.5, 0.0, 1.0)) if danger > 0.35 else -60.0, delta * 30.0)
-	heart.pitch_scale = lerpf(1.0, 1.7, clampf((danger - 0.35) / 0.65, 0.0, 1.0))
+	heart.volume_db = move_toward(heart.volume_db, lerpf(-15.0, -2.0, clampf((danger - 0.3) / 0.5, 0.0, 1.0)) if danger > 0.3 else -60.0, delta * 30.0)
+	heart.pitch_scale = lerpf(1.0, 1.75, clampf((danger - 0.3) / 0.7, 0.0, 1.0))
 
 	var target := MUSIC_DB
 	if colossus and colossus.visible and Game.player:

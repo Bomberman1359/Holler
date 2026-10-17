@@ -108,9 +108,10 @@ def build_heights(x, z):
         e = np.hypot(rx / (S["FOOT_WIDTH"] * 0.5), rz / (S["FOOT_LENGTH"] * 0.5))
         foot_e = np.minimum(foot_e, e)
         level = float(h[e < 1.0].mean())
-        foot_water.append(level - 1.5)
         inside = 1.0 - smoothstep(0.55, 1.0, e)
         h = np.where(e < 1.7, h * (1.0 - inside * 0.85) + (level - 3.2) * inside * 0.85 + 0.95 * np.exp(-((e - 1.14) / 0.13) ** 2), h)
+        ring = (e > 0.74) & (e < 0.86)
+        foot_water.append(min(level - 1.5, float(h[ring].min()) - 0.25))
 
     crater_mask = np.zeros(shape, dtype=np.float32)
     craters = []

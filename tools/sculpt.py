@@ -78,6 +78,7 @@ class Body:
         self.extras = []
         self.paints = []
         self.lumps = []
+        self.hard_parts = []
         self.base = (0.6, 0.6, 0.6)
 
 
@@ -121,6 +122,10 @@ class Body:
     def lumpy(self, freq, size, seed=0):
         self.lumps.append((freq, size, seed))
 
+    def hard(self, bone, part, shine=0.4):
+        verts, normals, faces, rgb = part.arrays()
+        self.hard_parts.append((self.index[bone], verts, normals, faces, rgb, shine))
+
 
     def distance(self, P, detail=True):
         d = np.full(len(P), 1e9, dtype=np.float32)
@@ -153,7 +158,7 @@ class Body:
         near = G[d < step * 1.5]
         return near.min(axis=0) - pad, near.max(axis=0) + pad
 
-    def build(self, voxel, triangles, folder="creatures", soft=None, wide=None, scale_ao=None):
+    def build(self, voxel, triangles, folder="creatures", soft=None, wide=None, scale_ao=None, soft_bones=None):
         from skimage import measure
         import pyfqmr
         lo, hi = wide if wide else self.bounds(voxel * 3.0)
@@ -211,7 +216,10 @@ class Body:
                 shine = shine * (1 - m[:, 0]) + sh * m[:, 0]
         D = self.bone_distances(verts)
         soft = soft if soft else unit * 1.2
-        W = np.exp(-(D - D.min(axis=1, keepdims=True)) / soft)
+        softs = np.full(len(self.bones), soft, dtype=np.float32)
+        for bone_name, value in (soft_bones or {}).items():
+            softs[self.index[bone_name]] = value
+        W = np.exp(-(D - D.min(axis=1, keepdims=True)) / softs[None, :])
         order = np.argsort(-W, axis=1)[:, :4]
         Wt = np.take_along_axis(W, order, axis=1)
         Wt[Wt < 0.02] = 0.0
@@ -221,6 +229,23 @@ class Body:
             rel = b["head"] - (self.bones[b["parent"]]["head"] if b["parent"] >= 0 else 0.0)
             skeleton.append({"name": b["name"], "parent": b["parent"], "rest": [1, 0, 0, 0, 1, 0, 0, 0, 1, float(rel[0]), float(rel[1]), float(rel[2])]})
         color = np.concatenate([np.clip(rgb, 0, 1), ao[:, None]], axis=1)
+        order = order.astype(np.int64)
+        for (bone, hv, hn, hf, hrgb, hshine) in self.hard_parts:
+            base = len(verts)
+            verts = np.concatenate([verts, hv])
+            normals = np.concatenate([normals, hn])
+            faces = np.concatenate([faces, hf + base])
+            hc = np.zeros((len(hv), 4), dtype=np.float32)
+            hc[:, :3] = np.asarray(hrgb, dtype=np.float32)[:, :3]
+            hc[:, 3] = 1.0
+            color = np.concatenate([color, hc])
+            shine = np.concatenate([shine, np.full(len(hv), hshine, dtype=np.float32)])
+            ob = np.zeros((len(hv), 4), dtype=np.int64)
+            ob[:, 0] = bone
+            ow = np.zeros((len(hv), 4), dtype=np.float32)
+            ow[:, 0] = 1.0
+            order = np.concatenate([order, ob])
+            Wt = np.concatenate([Wt, ow])
         write_hmesh(folder, self.name, verts, normals, verts[:, :2], faces.reshape(-1).astype(np.uint32), color=color,
                     uv2=np.stack([verts[:, 2], shine], axis=1), bones=order.astype(np.uint16), weights=Wt.astype(np.float32), skeleton=skeleton)
         info = {"name": self.name, "triangles": int(len(faces)), "from": int(full), "vertices": int(len(verts)), "bones": len(self.bones),
@@ -235,3 +260,86 @@ class Body:
             o[i] = e
             g[:, i] = self.distance(P + o) - self.distance(P - o)
         return g / np.maximum(np.linalg.norm(g, axis=1, keepdims=True), 1e-9)
+
+
+def _unit(v):
+    v = np.asarray(v, dtype=np.float64)
+    return v / max(float(np.linalg.norm(v)), 1e-9)
+
+
+class Hard:
+    def __init__(self):
+        self.tris = []
+
+    def tri(self, a, b, c, n, rgb):
+        self.tris.append((np.asarray(a, dtype=np.float64), np.asarray(b, dtype=np.float64), np.asarray(c, dtype=np.float64), _unit(n), rgb))
+
+    def quad(self, a, b, c, d, n, rgb):
+        self.tri(a, b, c, n, rgb)
+        self.tri(a, c, d, n, rgb)
+
+    def frame(self, axis):
+        axis = _unit(axis)
+        side = _unit(np.cross(axis, (0.0, 1.0, 0.0) if abs(axis[1]) < 0.9 else (1.0, 0.0, 0.0)))
+        return axis, side, np.cross(side, axis)
+
+    def tube(self, a, b, r, rgb, sides=6, r2=None, caps=True):
+        a, b = np.asarray(a, dtype=np.float64), np.asarray(b, dtype=np.float64)
+        axis, u, v = self.frame(b - a)
+        r2 = r if r2 is None else r2
+        ang = [2.0 * math.pi * k / sides for k in range(sides + 1)]
+        ra = [a + (u * math.cos(t) + v * math.sin(t)) * r for t in ang]
+        rb = [b + (u * math.cos(t) + v * math.sin(t)) * r2 for t in ang]
+        for k in range(sides):
+            mid = (ang[k] + ang[k + 1]) * 0.5
+            self.quad(ra[k], ra[k + 1], rb[k + 1], rb[k], u * math.cos(mid) + v * math.sin(mid), rgb)
+        if caps:
+            for k in range(1, sides - 1):
+                self.tri(ra[0], ra[k], ra[k + 1], -axis, rgb)
+                self.tri(rb[0], rb[k], rb[k + 1], axis, rgb)
+
+    def box(self, center, axes, half, rgb):
+        c = np.asarray(center, dtype=np.float64)
+        X, Y, Z = [np.asarray(a, dtype=np.float64) for a in axes]
+        hx, hy, hz = half
+        def P(sx, sy, sz):
+            return c + X * hx * sx + Y * hy * sy + Z * hz * sz
+        self.quad(P(1, -1, -1), P(1, 1, -1), P(1, 1, 1), P(1, -1, 1), X, rgb)
+        self.quad(P(-1, -1, -1), P(-1, -1, 1), P(-1, 1, 1), P(-1, 1, -1), -X, rgb)
+        self.quad(P(-1, 1, -1), P(-1, 1, 1), P(1, 1, 1), P(1, 1, -1), Y, rgb)
+        self.quad(P(-1, -1, -1), P(1, -1, -1), P(1, -1, 1), P(-1, -1, 1), -Y, rgb)
+        self.quad(P(-1, -1, 1), P(1, -1, 1), P(1, 1, 1), P(-1, 1, 1), Z, rgb)
+        self.quad(P(-1, -1, -1), P(-1, 1, -1), P(1, 1, -1), P(1, -1, -1), -Z, rgb)
+
+    def beam(self, a, b, w, h, rgb, up=(0.0, 1.0, 0.0)):
+        a, b = np.asarray(a, dtype=np.float64), np.asarray(b, dtype=np.float64)
+        X = _unit(b - a)
+        Z = np.cross(X, _unit(up))
+        if np.linalg.norm(Z) < 1e-6:
+            Z = np.cross(X, (1.0, 0.0, 0.0))
+        Z = _unit(Z)
+        Y = np.cross(Z, X)
+        self.box((a + b) * 0.5, (X, Y, Z), (float(np.linalg.norm(b - a)) * 0.5, h * 0.5, w * 0.5), rgb)
+
+    def ibeam(self, a, b, size, rgb, up=(0.0, 1.0, 0.0)):
+        a, b = np.asarray(a, dtype=np.float64), np.asarray(b, dtype=np.float64)
+        X = _unit(b - a)
+        Z = _unit(np.cross(X, _unit(up)))
+        Y = np.cross(Z, X)
+        L = float(np.linalg.norm(b - a)) * 0.5
+        m = (a + b) * 0.5
+        f = size * 0.12
+        self.box(m + Y * (size * 0.5 - f * 0.5), (X, Y, Z), (L, f * 0.5, size * 0.42), rgb)
+        self.box(m - Y * (size * 0.5 - f * 0.5), (X, Y, Z), (L, f * 0.5, size * 0.42), rgb)
+        self.box(m, (X, Y, Z), (L, size * 0.5 - f, size * 0.07), rgb)
+
+    def arrays(self):
+        V, N, C = [], [], []
+        for (a, b, c, n, rgb) in self.tris:
+            if np.dot(np.cross(b - a, c - a), n) > 0.0:
+                b, c = c, b
+            V += [a, b, c]
+            N += [n, n, n]
+            C += [rgb, rgb, rgb]
+        V = np.asarray(V, dtype=np.float32)
+        return V, np.asarray(N, dtype=np.float32), np.arange(len(V), dtype=np.int64).reshape(-1, 3), np.asarray(C, dtype=np.float32)

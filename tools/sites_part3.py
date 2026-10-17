@@ -52,7 +52,6 @@ def ford():
         fin = [[(0.07, 0.8, 0.6), (0.07, 0.9, 4.6), (-0.07, 0.9, 4.6), (-0.07, 0.8, 0.6)],
                [(0.03, 4.0, 0.7), (0.03, 4.0, 2.4), (-0.03, 4.0, 2.4), (-0.03, 4.0, 0.7)]]
         k.loft(fin, P.ALU)
-        k.decal("soot_0", (0.0, 1.0, 3.0), (0, 1, 0), 3.0, 3.0, up=(0, 0, 1))
     (fx, fz), d = (lambda p: ((p[0][0] - k.ox, p[0][1] - k.oz), p[1]))(maplib.track_at(maplib.track_nearest(*S["FORD"])[0]))
     side = (-d[1], d[0])
     for along in (-9.0, 9.0):
@@ -78,7 +77,7 @@ def tunnel():
     k.beam((-6.1, 1.1, -3.2), (-4.9, 1.0, 2.6), 0.12, P.ENAMEL.but(tint=(0.5, 0.2, 0.18)))
     with k.at(-6.9, 0.0, 5.6, yaw=-HALF_PI):
         P.signpost(k, "sign_halt", 1.5, 2.3, 1.3)
-    k.decal("sign_danger", (-6.42, 1.9, -3.5), (-1, 0, 0), 1.0)
+    k.decal("sign_danger", (-6.42, 1.9, -3.5), (-1, 0, 0), 0.56)
     P.fence(k, (-6.0, -4.0), (-6.0, -40.0), height=2.2, gap=4.0, broken=0.5, seed=102)
     P.fence(k, (-6.0, 4.0), (-6.0, 44.0), height=2.2, gap=4.0, broken=0.5, seed=103)
     k.mark("gate", (-8.0, 0.2, 0.0))
@@ -92,7 +91,7 @@ def tunnel():
     for (u0, u1, v0, v1) in south:
         P.window_bars(k, v3(ox0 + u0, v0, oz1), v3(1, 0, 0), u1 - u0, v1 - v0)
     k.wall((ox1, oz0), (ox0, oz0), oh, t, conc, ins, [(3.0, 4.0, 1.5, 2.2), (12.0, 13.0, 1.5, 2.2), (21.0, 22.0, 1.5, 2.2)])
-    k.wall((ox1, oz1), (ox1, oz0), oh, t, conc, ins)
+    k.wall((ox1, oz1), (ox1, oz0), oh, t, conc, ins, [(oz1 - 7.95, oz1 - 6.65, 0.0, 2.15)])
     k.wall((ox0, oz0), (ox0, oz1), oh, t, conc, ins, [(0.7, 1.9, 0.0, 2.2)])
     k.floor((ox0 + t, oz0 + t), (ox1 - t, oz1 - t), 0.1, 0.4, conc.indoors(dark))
     k.floor((ox0 - 0.3, oz0 - 0.3), (ox1 + 0.3, oz1 + 0.3), oh + 0.25, 0.25, conc, conc.indoors(dark), holes=[(46.6, 49.4, 9.4, 14.6)])
@@ -137,7 +136,7 @@ def tunnel():
     with k.at(40.8, 0.1, 9.6, yaw=-HALF_PI):
         P.locker(k, dark)
         k.mark("hide_office", (0, 0.2, 0))
-    k.decal("ruler", (41.75, 1.6, 12.0), (-1, 0, 0), 0.3, 3.0, sky=dark)
+    k.decal("ruler", (42.0, 1.6, 12.0), (-1, 0, 0), 0.3, 3.0, sky=dark)
     for n, (x0, x1) in enumerate(rooms[3:]):
         P.cell_door(k, v3(x0 + 0.8, 0.1, cz - 0.02), v3(1, 0, 0), sky=dark, burst=-0.9 - 0.3 * n, seed=5 + n)
         k.box((x0 + 0.5, 0.1, oz1 - t - 0.9), (x0 + 2.6, 0.45, oz1 - t - 0.15), P.IRON.indoors(dark))
@@ -145,7 +144,7 @@ def tunnel():
     k.decal("hand_drag", (47.9, 2.0, oz1 - t - 0.012), (0, 0, -1), 1.3, sky=0.4)
     P.rubble_heap(k, 48.0, 12.0, 1.5, 0.5, 104, sky=0.5)
     k.decal("drag_long", (33.0, 0.115, 7.4), (0, 1, 0), 11.0, 1.2, sky=dark)
-    k.decal("chalk_six", (ox0 + t + 0.012, 1.6, 7.3), (1, 0, 0), 0.9, sky=dark)
+    k.decal("chalk_six", (20.6, 1.6, oz0 + t), (0, 0, 1), 0.9, sky=dark)
 
     hx0, hx1, hz0, hz1, hh = 58.0, 82.0, -46.0, -10.0, 18.5
     ht = 0.9
@@ -163,7 +162,18 @@ def tunnel():
         k.beam((hx1 - 0.4, hh - 0.6, z), (hx1 - rng.uniform(2.5, 6.0), hh + rng.uniform(1.0, 4.0), z + rng.uniform(-0.8, 0.8)), 0.35, P.RUST, solid=False)
     k.decal("ruler_tall", (hx0 + 7.0, 9.0, hz0 + ht + 0.02), (0, 0, 1), 1.7, 18.0, sky=0.6)
     k.decal("ruler_tall", (hx1 - 7.0, 9.0, hz0 + ht + 0.02), (0, 0, 1), 1.7, 18.0, sky=0.6)
-    k.decal("wall_nicht_auf", ((hx0 + hx1) / 2, 8.5, hz0 + ht + 0.02), (0, 0, 1), 9.0, sky=0.6)
+    k.decal("wall_see_house", ((hx0 + hx1) / 2, 12.2, hz0 + ht + 0.02), (0, 0, 1), 8.0, sky=0.6)
+    lz = -28.0
+    k.decal("paint_bar", (hx1 - ht, 8.0, lz), (-1, 0, 0), 15.0, 0.12, turn=HALF_PI, sky=0.6)
+    for m in range(1, 16):
+        w = 2.6 if m % 2 == 0 else 1.2
+        k.decal("paint_bar", (hx1 - ht, float(m), lz + w / 2), (-1, 0, 0), w, 0.14, sky=0.6)
+        if m % 2 == 0:
+            lw = 1.5 + m * 0.035
+            k.decal("h_%d" % m, (hx1 - ht, m + 0.02, lz + 2.85 + lw / 2), (-1, 0, 0), lw, sky=0.6)
+    for key, h in (("d_194", 1.94), ("d_260", 2.60), ("d_610", 6.10)):
+        k.decal("paint_bar", (hx1 - ht, h, lz - 0.5), (-1, 0, 0), 0.9, 0.07, tint=(0.95, 0.95, 0.9), sky=0.6)
+        k.decal(key, (hx1 - ht, h + 0.03, lz - 2.1), (-1, 0, 0), 2.2, sky=0.6)
     k.decal("hand_big", (hx1 - ht - 0.02, 12.5, -30.0), (-1, 0, 0), 4.2, sky=0.6)
     for (rx, rz) in ((64.0, -38.0), (76.0, -38.0), (64.0, -20.0), (76.0, -20.0)):
         k.box((rx - 1.0, 0.08, rz - 1.0), (rx + 1.0, 0.7, rz + 1.0), conc.but(sky=0.6))
@@ -202,7 +212,7 @@ def tunnel():
         k.wall((gx1 + 6.0, mz0), (gx0, mz0), 11.0, 0.9, conc, conc.indoors(0.1))
         P.rubble_heap(k, gx0 + 4.5, (mz0 + mz1) / 2, 5.0, 5.5, 109, sky=0.15)
         P.rubble_heap(k, gx0 + 9.0, (mz0 + mz1) / 2 + 1.0, 4.5, 8.0, 110, sky=0.1)
-        k.decal("stencil_B", (gx0 - 2.52, 9.9, (mz0 + mz1) / 2), (-1, 0, 0), 1.6)
+        k.decal("stencil_B", (gx0, 9.9, (mz0 + mz1) / 2), (-1, 0, 0), 1.6)
         k.mark("mouth", (gx0 - 6.0, 0.3, (mz0 + mz1) / 2))
     bx, bz = 30.0, -52.0
     with k.at(bx, k.ground(bx, bz) + 1.6, bz, yaw=0.5, roll=1.05, pitch=0.12):
@@ -218,13 +228,7 @@ def tunnel():
         k.tube([(-0.9, 1.1, 0), (0.9, 1.1, 0)], [0.55, 0.55], 12, P.RUST)
         for sx in (-1, 1):
             k.box((sx * 1.0 - 0.08, 0.5, -0.5), (sx * 1.0 + 0.08, 1.7, 0.5), P.RUST)
-        top = v3(26.0, 250.0, -14.0)
-        k.tube([v3(0, 1.6, 0), top * 0.25, top * 0.6, top], [0.05, 0.05, 0.05, 0.05], 4, P.IRON, solid=False, cap_start=False, cap_end=False)
-        for (hgt, name) in ((38.0, "mark_38"), (61.0, "mark_61"), (110.0, "mark_110"), (240.0, "mark_240")):
-            p = top * (hgt / 250.0)
-            k.block(p + v3(1.6, 0, 0), (3.2, 1.3, 0.06), P.ENAMEL.but(tint=(0.12, 0.12, 0.12)), solid=False)
-            k.decal(name, p + v3(1.6, 0, 0.04), (0, 0, 1), 3.0)
-            k.decal(name, p + v3(1.6, 0, -0.04), (0, 0, -1), 3.0)
+        k.tube([v3(0, 1.62, 0.0), v3(0.5, 1.2, 1.4), v3(1.6, 0.15, 3.0), v3(4.5, 0.05, 4.0)], [0.05, 0.05, 0.05, 0.05], 4, P.IRON, solid=False, cap_start=False, cap_end=False)
     k.mark("winch", (wx - 3.0, 0.2, wz + 2.0))
     with k.at(8.0, 0.0, -14.0, yaw=-1.1):
         P.truck(k, burned=False)
@@ -236,7 +240,9 @@ def tunnel():
                 P.crate(k, rng.uniform(0.6, 1.0))
     k.mark("yard", (30.0, 0.2, 0.0))
     k.mark("reacher_home", (56.0, 0.2, 2.0))
-    k.mark("chase_start", (40.0, 0.2, 7.3))
+    k.mark("chase_start", (46.5, 0.2, 7.3))
+    for n, p in enumerate(((30.0, 0.2, 7.4), (46.5, 0.2, 7.3), (49.3, 0.2, 7.3), (51.6, 0.2, 7.3), (54.0, 0.2, 6.0))):
+        k.mark("way_%d" % n, p)
     return k
 
 

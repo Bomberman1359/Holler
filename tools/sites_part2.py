@@ -198,9 +198,15 @@ def sanatorium():
             k.box((x + 0.5, 0.12, t + 0.2), (x + 2.4, 0.5, t + 1.0), P.IRON.indoors(dark))
             k.decal("stencil_%s" % ("7", "12", "B", "31")[n], (x + 3.3, 1.5, cz + 0.225), (0, 0, 1), 0.45, sky=dark)
         k.decal("tally", (12.6, 1.3, t + 0.012), (0, 0, 1), 1.6, sky=dark)
-        k.decal("wall_hoert_alles", (12.7, 1.95, t + 0.012), (0, 0, 1), 2.4, sky=dark)
+        k.decal("wall_hoert_alles", (14.9, 1.75, 4.4), (-1, 0, 0), 2.6, sky=dark)
         k.mark("cell_scratch", (12.7, 1.5, t + 1.0))
-        k.decal("hand_drag", (21.5, 2.0, t + 0.012), (0, 0, 1), 1.5, sky=dark)
+        k.decal("hand_drag", (20.2, 0.98, t + 0.012), (0, 0, 1), 0.8, sky=dark)
+        k.decal("spatter_1", (17.4, 0.9, t + 0.012), (0, 0, 1), 1.6, sky=dark)
+        k.decal("pool_2", (13.0, 0.135, 3.0), (0, 1, 0), 1.4, sky=dark)
+        k.decal("smear_0", (7.5, 0.135, 10.4), (0, 1, 0), 4.0, 1.2, up=(1, 0, 0), turn=0.1, sky=dark)
+        k.decal("pool_1", (2.0, 0.135, 10.6), (0, 1, 0), 1.5, sky=dark)
+        k.decal("hand_big", (0.62, 1.3, 7.8), (1, 0, 0), 0.8, sky=dark)
+        k.decal("spatter_0", (24.0 - 0.1, 1.1, 4.0), (-1, 0, 0), 1.4, sky=dark)
         k.decal("pool_0", (17.0, 0.135, 4.0), (0, 1, 0), 1.7, sky=dark)
         with k.at(29.0, 0.12, 4.2, yaw=0.5):
             P.clamp_chair(k, dark)
@@ -219,34 +225,36 @@ def sanatorium():
             P.locker(k, dark)
             k.mark("hide_ground", (0, 0.2, 0))
         k.decal("drag_long", (16.0, 0.135, 10.3), (0, 1, 0), 9.0, 1.3, up=(0, 0, 1), turn=HALF_PI, sky=dark)
-        k.decal("chalk_dont_run", (door_u + 2.2, 1.7, D - t - 0.012), (0, 0, -1), 1.5, sky=dark)
+        k.decal("chalk_dont_run", (door_u + 2.95, 1.75, D - t - 0.012), (0, 0, -1), 1.35, sky=dark)
         P.rubble_heap(k, 40.0, 5.5, 5.0, 1.9, 71, sky=0.6)
         P.rubble_heap(k, 44.5, 9.0, 3.2, 1.2, 72, sky=0.8)
         k.stairs((1.0, 0.12, 6.5), (1, 0), g_h - 0.12, 4.6, 1.9, P.CONCRETE.indoors(dark))
         ward_floor = P.FLOOR.indoors(0.09).but(turn=True)
         k.floor((t, t), (39.0, D - t), g_h, 0.25, ward_floor, P.PAINT.indoors(dark),
-                holes=[(1.0, 5.6, 5.5, 7.5), (20.0, 23.4, 1.6, 7.0)])
+                holes=[(1.0, 5.6, 5.5, 7.5)])
         wsky = 0.09
         rng = np.random.default_rng(77)
-        x = 7.5
-        for n, length in enumerate((2.0, 2.0, 2.0, 2.4, 3.0)):
-            for side in (0, 1):
-                z = (t + length / 2 + 0.15) if side == 0 else (D - t - length / 2 - 0.15)
-                if side == 1 and n == 0:
-                    continue
-                with k.at(x, g_h, z, yaw=0.0 if side == 0 else math.pi):
-                    P.bed(k, length, 0.9 + 0.12 * (length - 2.0), wsky, made=(rng.random() < 0.4), seed=n * 2 + side)
-            x += 2.3 + 0.2 * n
-        for (bx, length, wd) in ((24.6, 5.0, 1.5), (31.0, 6.5, 1.9)):
-            with k.at(bx, g_h, t + wd / 2 + 0.2, yaw=HALF_PI):
-                P.bed(k, length, wd, wsky, made=False, seed=int(bx))
-        with k.at(33.0, g_h, D - t - 1.4, yaw=HALF_PI):
-            P.bed(k, 9.0, 2.4, wsky, made=False, mattress=True, seed=9)
-        k.mark("paper_journal2", (9.9, g_h + 0.7, 2.0))
-        k.decal("sheet_hand", (9.9, g_h + 0.69, 2.0), (0, 1, 0), 0.24, up=(1, 0, 0), turn=0.4, sky=wsky)
-        for (wx, wy, ww) in ((8.6, g_h + 1.35, 0.9), (16.4, g_h + 2.0, 1.7), (25.0, g_h + 2.9, 3.0)):
+        x = 1.2
+        for n, length in enumerate((2.0, 2.4, 3.0, 3.8, 5.0, 7.0, 9.0)):
+            wd = 0.9 + 0.12 * (length - 2.0)
+            with k.at(x + length / 2, g_h, t + wd / 2 + 0.2, yaw=HALF_PI):
+                P.bed(k, length, wd, wsky, made=(n < 2), mattress=True, seed=n * 3, tall=(length / 2.0) ** 0.5)
+            if n == 2:
+                top = 0.5 * (length / 2.0) ** 0.5 + 0.215
+                k.mark("paper_journal2", (x + length * 0.7, g_h + top + 0.06, t + wd / 2 + 0.2))
+                k.decal("sheet_hand", (x + length * 0.7, g_h + top + 0.005, t + wd / 2 + 0.2), (0, 1, 0), 0.24, up=(1, 0, 0), turn=0.4, sky=wsky)
+            if n >= 4:
+                k.decal("pool_%d" % (n % 3), (x + length * 0.5, g_h + 0.015, t + wd + 0.75), (0, 1, 0), 0.9 + 0.25 * n, sky=wsky)
+            x += length + 0.6
+        for bx in (9.0, 11.6, 14.2):
+            with k.at(bx, g_h, D - t - 1.15, yaw=math.pi):
+                P.bed(k, 2.0, 0.9, wsky, made=True, seed=int(bx * 7))
+        for (wx, wy, ww) in ((7.8, g_h + 1.4, 1.0), (14.0, g_h + 2.0, 1.35), (20.2, g_h + 2.7, 1.7), (26.4, g_h + 3.35, 1.9)):
             k.decal("wall_noch_da", (wx, wy, t + 0.012), (0, 0, 1), ww, sky=wsky)
-        k.decal("wall_noch_da", (30.0, H - 0.02, 6.0), (0, -1, 0), 6.5, up=(0, 0, -1), sky=wsky)
+        k.decal("wall_noch_da", (26.0, H - 0.02, 3.4), (0, -1, 0), 3.8, up=(0, 0, -1), sky=wsky)
+        k.decal("drag_long", (13.0, g_h + 0.015, 4.2), (0, 1, 0), 12.0, 1.2, up=(1, 0, 0), turn=0.04, sky=wsky)
+        k.decal("spatter_1", (32.6, g_h + 0.8, t + 0.012), (0, 0, 1), 1.8, sky=wsky)
+        k.decal("hand_drag", (17.1, g_h + 0.7, t + 0.012), (0, 0, 1), 1.2, sky=wsky)
         k.floor((t, t), (33.5, D - t), H + 0.02, 0.12, P.PAINT.indoors(wsky), P.PAINT.indoors(wsky),
                 holes=[(20.5, 24.0, 6.0, 11.0), (29.5, 33.5, 5.5, 11.6), (3.0, 8.0, 0.4, 6.0)])
         with k.at(6.4, g_h, D - t - 0.35, yaw=math.pi):
@@ -260,7 +268,7 @@ def sanatorium():
             k.mark("camera", (0, 1.5, 0))
         k.decal("sheet_bloody", (37.2, g_h + 0.012, 4.2), (0, 1, 0), 0.24, up=(1, 0, 0), turn=-0.5, sky=0.5)
         k.mark("paper_journal3", (37.2, g_h + 0.2, 4.2))
-        k.decal("hand_big", (38.4, g_h + 1.6, D - t - 0.012), (0, 0, -1), 2.0, sky=0.5)
+        k.decal("hand_big", (29.5, g_h + 1.9, D - t - 0.012), (0, 0, -1), 1.5, sky=wsky)
         k.decal("smear_2", (36.5, g_h + 0.012, 7.0), (0, 1, 0), 5.0, 1.6, up=(1, 0, 0), sky=0.5)
         for bx in (12.0, 22.0):
             with k.at(bx, g_h, 6.0, yaw=rng.uniform(0, 3)):
@@ -276,6 +284,9 @@ def sanatorium():
         k.mark("last_room_view", (39.0, g_h + 1.6, 6.0))
         k.mark("reacher_home", (30.0, 0.2, 10.3))
         k.mark("reacher_ward", (34.0, g_h + 0.2, 6.0))
+        for n, p in enumerate(((34.0, g_h + 0.2, 8.3), (12.0, g_h + 0.2, 8.3), (6.6, g_h + 0.2, 6.5), (3.2, 1.8, 6.5), (0.9, 0.3, 6.5),
+                               (1.6, 0.3, 8.0), (1.8, 0.3, 10.5), (door_u, 0.3, 10.5), (door_u, 0.3, D + 1.0), (door_u, 0.3, D + 4.0))):
+            k.mark("way_%d" % n, p)
         k.box((door_u - 1.3, -0.2, D), (door_u + 1.3, 0.12, D + 1.4), P.CONCRETE)
         P.door_leaf(k, v3(door_u - 0.75, 0.12, D - 0.1), v3(1, 0, 0), 0.72, 2.35, angle=1.9, m=P.GREEN_BOARDS)
         k.box((door_u + 1.2, 1.5, D + 0.01), (door_u + 3.0, 2.2, D + 0.04), P.ENAMEL, solid=False)
